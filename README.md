@@ -47,6 +47,8 @@ cn pi --model deepseek-v4-1-flash
 
 ## Models
 
+Refresh the Claude Code compatible catalog with `cn models claude --refresh --limit 200`.
+
 Each tool's own model picker lists Concentrate models while it runs under `cn`. If you switch models inside the tool and quit, `cn` starts there next time. It reads the choice back from the tool's own session files, and only saves a model that differs from the launch model and exists in the catalog. If a tool's files look different than expected, nothing is saved. Codex's reader is untested against a real install.
 
 Pass `--session-dir` yourself to Pi and `cn` reads that folder. With `--no-session` there is nothing to read.
