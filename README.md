@@ -1,102 +1,140 @@
-# Concentrate AI CLI (v0)
+# Concentrate CLI
 
-Run your coding tools through Concentrate AI. `cn <tool>` launches the tool with your Concentrate key and model for that one run. Your normal setup is not touched.
+One API key for Claude Code, Codex, OpenCode, and Pi. Launch your coding tools
+through Concentrate to manage model access and track usage in one place.
+You can also configure the Cursor desktop editor to use Concentrate.
 
-v0 covers the terminal tools: **Claude Code, Codex CLI, OpenCode, Pi**.
+For **macOS and Linux**. Requires **Node.js 18.18+**, a Concentrate API key,
+and the coding tools you want to use installed on your `PATH`.
 
 ## Install
 
-Needs Node.js 18+. No npm packages.
-
 ```sh
-curl -fsSL https://raw.githubusercontent.com/AjayK47/concentrateai-cli/main/install.sh | bash
+curl -fsSL https://concentrate.ai/cli/install.sh | bash
 cn
 ```
 
-Or from a clone: `./install.sh`. Set `CN_INSTALL_REF` to install a specific branch or tag.
+The installer downloads the latest built release, verifies its SHA-256 checksum,
+and installs `cn` in `~/.local/bin`. Node.js 18.18+ is required; npm is not needed
+for release installs. It preserves saved credentials and tool settings on updates.
+Rerun the same command to update.
 
-The installer copies the package to `~/.local/share/concentrate-cli/` and writes a `cn` launcher into `~/.local/bin/`. The launcher records the absolute path of the Node it was installed with. It will not overwrite a different `cn` already on that path. Running the installer again updates `cn` in place.
-
-## First run
-
-Run `cn`. With no key saved, it starts setup: it asks for your key (or offers one it finds in `CONCENTRATE_API_KEY`, showing only the last four characters) and checks it. That is all setup asks. Every tool starts on a sensible default model; change one any time with `cn model <tool>`.
-
-A key found only in your environment is used where it is. It is not copied to disk.
-
-## Use
+To install a particular release:
 
 ```sh
-cn                              # interactive launcher
-cn claude                       # launch Claude Code through Concentrate
-cn codex -- exec 'Say hello'    # everything after -- goes to the tool
+curl -fsSL https://concentrate.ai/cli/install.sh | CN_INSTALL_VERSION=0.1.0 bash
+```
+
+If `~/.local/bin` is not on your `PATH`, the installer prints the line to add to
+your shell profile. For a source checkout, run `npm ci` and `./install.sh` instead.
+Source installs require npm to compile the TypeScript code.
+
+`cn` opens a menu for launching tools, Configure, Reset, Settings, Models, and Doctor.
+Settings lets you choose each tool’s default model and save or replace your API key.
+Launching a tool without a key starts setup. You can also use an existing
+`CONCENTRATE_API_KEY` environment variable.
+
+Actions return to the menu when finished. Doctor shows local installation status
+and offers optional live route checks. Use Escape to go back, or `q` at home to quit.
+
+## Launch a tool
+
+```sh
+cn                              # Open the interactive launcher
+cn claude                       # Start Claude Code
+cn codex                        # Start Codex
+cn opencode                     # Start OpenCode
+cn pi                           # Start Pi
+```
+
+Pass tool-specific arguments after `--`:
+
+```sh
+cn codex -- exec "Say hello"
 cn opencode -- run "Say hello"
-cn pi --model deepseek-v4-1-flash
 ```
 
-| Command | What it does |
-|---|---|
-| `cn` | Open the launcher (a plain `--help` when not in a terminal) |
-| `cn setup [--no-verify] [--models]` | Save your key. `--models` also picks a default per tool |
-| `cn config` | Show key status and default models (never prints the key) |
-| `cn key [--no-verify]` | Replace the saved key |
-| `cn logout` | Remove the saved key |
-| `cn reset [--yes] [--sessions]` | Clear the saved key, models, and catalog cache. Pi sessions are kept unless `--sessions` |
-| `cn model [<tool> [<id>]]` | Show or change default models |
-| `cn models [<tool>] [--search x] [--refresh] [--limit n]` | Browse the catalog |
-| `cn doctor [<tool>]` | Check installs and key; with a tool, test its API route live |
+## Models and providers
 
-## Models
-
-Refresh the Claude Code compatible catalog with `cn models claude --refresh --limit 200`.
-
-Each tool's own model picker lists Concentrate models while it runs under `cn`. If you switch models inside the tool and quit, `cn` starts there next time. It reads the choice back from the tool's own session files, and only saves a model that differs from the launch model and exists in the catalog. If a tool's files look different than expected, nothing is saved. Codex's reader is untested against a real install.
-
-Pass `--session-dir` yourself to Pi and `cn` reads that folder. With `--no-session` there is nothing to read.
-
-## OpenCode v1 and v2
-
-Both work. `cn` gives OpenCode its Concentrate provider through an inline config. The same config is read by v1 and accepted by v2. OpenCode v2 also needs `--standalone` so it uses a private server and not its shared background service, which would ignore the config. v1 rejects that flag, so `cn` adds it only when `opencode --help` lists it. `cn doctor` shows which version is installed.
-
-Remembering a model you switched to inside OpenCode is not supported, because OpenCode keeps sessions in a database.
-
-## If the tool isn't installed
-
-`cn codex` without Codex installed prints one line saying so, with an install hint, and exits `127`. It checks before reading your key or touching the network.
-
-Exit codes: `0` ok (or the tool's own code), `1` failure, `2` bad usage, `127` tool not found.
-
-## Files and environment
-
-- Config lives in `~/.config/concentrate-cli/` (`credentials.json`, `config.json`, `catalog.json`, `pi-sessions/`), files mode `0600` in a `0700` directory. Symlinks are refused.
-- `CN_CONFIG_HOME` overrides the config directory. `CONCENTRATE_API_KEY` is used when no key is saved. `CN_OFFLINE=1` skips the catalog fetch.
-- Color follows `NO_COLOR` and the terminal. `CN_NO_MOTION=1` (or `CI`) turns the animation off. Piped output is plain text.
-
-## Security
-
-- **The key** reaches a tool only through that tool's environment. It is never in argv (visible in `ps`), and only `credentials.json` (mode `0600`) holds it on disk. Keys and model IDs with spaces or control characters are refused, and errors never repeat them.
-- **Claude Code** reads credentials from several places, and anything it finds is sent to the gateway. Under `cn` it ignores all of them:
-  - These are removed from its environment: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_OAUTH_TOKEN`, and the Bedrock/Vertex/Foundry switches.
-  - The same names are blanked in the settings `cn` passes, which outrank your own settings files.
-  - The key arrives only through an `apiKeyHelper` that reads it from the child's environment. This means your own `apiKeyHelper` or settings `env` block can't send another credential to Concentrate.
-- **The model catalog is untrusted input.** Names are stripped of terminal control characters (no escape-sequence injection), and IDs that could pass for a command-line flag are dropped.
-- **Remembering a model** only reads the session `cn` started:
-  - Claude and Pi get a pinned session ID.
-  - For Codex, a session counts only if it was created during the run, in the same directory, on the Concentrate provider.
-  - Scripted runs, resumed sessions, and runs where you gave the tool a model flag are never remembered.
-  - Remembering can't change the tool's exit code.
-- **The terminal** is restored if a menu fails, or if `cn` is interrupted or killed mid-prompt.
-
-Not prevented: the coding agent itself runs commands with that environment, so a command it runs can read the key. That is true of any environment-based setup. Codex filters `*KEY*` variables from its shell by default.
-
-## Develop
+Concentrate automatically selects the provider for every tool. Model pickers
+show one entry per model, without separate provider variants.
 
 ```sh
-npm test        # node --test test/*.test.mjs
+cn model claude                 # Change Claude Code's default model
+cn models pi --search deepseek  # Search Pi-compatible models
+cn models --refresh             # Refresh the model catalog
 ```
 
-## Acknowledgments
+For custom models in Claude Code, cn updates context limits, output caps, and
+supported reasoning effort as models change. This requires Claude Code 2.1.287+
+with mods enabled. See [tool compatibility](docs/compatibility.md) for details.
 
-The installer approach and the per-tool adapter layout were inspired in part by [FireConnect](https://github.com/fw-ai/fireconnect) from Fireworks AI. No FireConnect code is included.
+## Configure a tool permanently
+
+To make a tool’s normal command use Concentrate, open `cn`, choose **Configure**,
+then select the tool. **Reset** is available directly on the same home menu. You can also run:
+
+```sh
+cn configure claude
+cn configure codex
+cn configure opencode
+cn configure pi
+cn configure cursor             # Cursor desktop; quit the app first
+```
+
+Save your key with `cn key` first. Configuration writes to the tool’s own settings;
+it does not replace its executable or change your shell profile. Restart the tool
+afterward. Run Configure again to refresh its saved model catalog.
+
+For Cursor desktop, install and open Cursor once, then quit it before Configure or
+Reset. Select models in Cursor afterward. Cursor stores your Concentrate key and
+sends requests through Cursor’s servers; Tab completions still use Cursor’s models.
+Cursor setup requires `sqlite3` and `pgrep` (included with macOS). It configures the
+desktop editor, not the Cursor CLI.
+
+To restore the settings from before Configure:
+
+```sh
+cn reset claude                 # Or codex, opencode, pi, cursor
+```
+
+Reset preserves settings you edited afterward and reports what it kept. Shell
+variables you set separately still apply. See [tool compatibility](docs/compatibility.md)
+for differences between permanent configuration and a session launched through `cn`.
+
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `cn settings` | Open interactive settings |
+| `cn configure <tool>` | Save Concentrate in a tool’s native settings |
+| `cn reset <tool>` | Restore that tool’s previous settings |
+| `cn setup` | Set up your API key |
+| `cn config` | Show key status, default models, and routing status |
+| `cn key` | Replace the saved API key |
+| `cn logout` | Remove the saved API key |
+| `cn doctor` | Check tool installations and key status |
+| `cn doctor <tool>` | Test a tool's API route with a live request |
+| `cn reset` | Restore configured tools and remove cn’s key, models, and cache |
+| `cn --help` | Show all commands and options |
+
+## Configuration
+
+Settings and credentials are stored in `~/.config/concentrate-cli/`, or under
+`$XDG_CONFIG_HOME/concentrate-cli` when set. Use `CN_CONFIG_HOME` to choose another
+directory. Credential and settings files are restricted to your user.
+
+Launching through `cn` applies session settings. Permanent configuration is a
+separate action, with private restore records stored under `tool-setups/`. See [security](docs/security.md) for credential handling.
+
+## Development
+
+```sh
+npm ci
+npm run check
+```
+
+See [development](docs/development.md) for testing and compatibility probes.
 
 ## License
 

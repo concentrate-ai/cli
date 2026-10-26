@@ -1,0 +1,25 @@
+name: Release CLI
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run release:pack
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+      - name: Publish checked release assets
+        run: gh release create "$RELEASE_TAG" release/concentrate-cli.tar.gz release/SHA256SUMS release/install.sh --verify-tag --title "$RELEASE_TAG" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}

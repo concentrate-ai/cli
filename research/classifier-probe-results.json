@@ -1,0 +1,29 @@
+{
+  "claudeCodeVersion": "2.1.304",
+  "date": "2026-10-20",
+  "upstream": "localhost mock only",
+  "realModelEvaluated": false,
+  "runs": [
+    {
+      "verdict": "allow",
+      "passed": true,
+      "classifierRequests": 1,
+      "canaryExists": true,
+      "artifacts": "/var/folders/xw/ls6hmn6d7w9c7xzdhyvk13zr0000gn/T/cn-classifier-probe-RHUiKL"
+    },
+    {
+      "verdict": "block",
+      "passed": true,
+      "classifierRequests": 2,
+      "canaryExists": false,
+      "artifacts": "/var/folders/xw/ls6hmn6d7w9c7xzdhyvk13zr0000gn/T/cn-classifier-probe-nu1j9X"
+    },
+    {
+      "verdict": "malformed",
+      "passed": true,
+      "classifierRequests": 10,
+      "canaryExists": false,
+      "artifacts": "/var/folders/xw/ls6hmn6d7w9c7xzdhyvk13zr0000gn/T/cn-classifier-probe-LhCGPo"
+    }
+  ]
+}
