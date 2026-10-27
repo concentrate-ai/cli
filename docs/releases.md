@@ -8,7 +8,7 @@ curl -fsSL https://concentrate.ai/cli/install.sh | bash
 
 It downloads built releases from `https://concentrate.ai/downloads/cli/`.
 The source repository can remain private. Only the installer, built JavaScript,
-license, documentation, and checksums are distributed publicly.
+documentation, and checksums are distributed publicly.
 
 ## Prepare locally
 

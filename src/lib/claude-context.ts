@@ -52,7 +52,6 @@ export function prepareClaudeContext({
       JSON.stringify({
         name: "cn-context",
         version: "0.1.0",
-        license: "Apache-2.0",
         author: { name: "Concentrate AI" },
         description:
           "Synchronizes model context, output limits, and reasoning compatibility through Concentrate.",

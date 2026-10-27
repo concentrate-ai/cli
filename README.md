@@ -188,7 +188,3 @@ npm run check
 ```
 
 See [development](docs/development.md) for testing and compatibility probes.
-
-## License
-
-[MIT License](LICENSE)
