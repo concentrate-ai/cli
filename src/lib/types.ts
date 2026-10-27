@@ -32,6 +32,7 @@ export interface PreparedHarness {
   env: Environment;
   unset?: readonly string[];
   recall?: () => string | null;
+  resumeHint?: string;
   cleanup: () => void;
 }
 export interface Harness {
@@ -74,6 +75,8 @@ export type Selection =
   | { value: string; cancel?: false; interrupted?: false }
   | { cancel: true; interrupted?: boolean; value?: undefined };
 export interface SelectOptions {
+  fullscreen?: boolean;
+  status?: string;
   items: MenuItem[];
   initial?: string;
   filterable?: boolean;

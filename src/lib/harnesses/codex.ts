@@ -7,6 +7,7 @@ import path from "node:path";
 
 import { API_ROOT } from "../catalog.js";
 import { writeCodexCatalog } from "../pickers.js";
+import { prepareCodexHandoff } from "../codex-daemon.js";
 import {
   createdMs,
   filesIn,
@@ -116,16 +117,37 @@ const adapter: Harness = {
         );
       }
     }
+    const allOverrides = [
+      ...overrides,
+      ...userConfig.overrides,
+      ...headerOverrides,
+    ];
+    let handoff;
+    try {
+      handoff = await prepareCodexHandoff({
+        forwarded: userConfig.args,
+        overrides: allOverrides,
+        model,
+        key,
+        env,
+      });
+    } catch (error) {
+      if (directory) fs.rmSync(directory, { recursive: true, force: true });
+      throw error;
+    }
     return {
       args: [
-        ...[...overrides, ...userConfig.overrides, ...headerOverrides].flatMap(
-          (value) => ["-c", value],
-        ),
+        ...(handoff ? ["--remote", handoff.remote] : []),
+        ...(handoff?.overrides ?? allOverrides).flatMap((value) => [
+          "-c",
+          value,
+        ]),
         "-m",
         model,
         ...userConfig.args,
       ],
       env: { CONCENTRATE_API_KEY: key },
+      resumeHint: handoff ? `cn codex resume ${userConfig.args[1]}` : undefined,
       recall: () =>
         recallCodexModel({
           env,
@@ -133,6 +155,7 @@ const adapter: Harness = {
           startedAt,
         }),
       cleanup() {
+        handoff?.cleanup();
         if (directory) fs.rmSync(directory, { recursive: true, force: true });
       },
     };

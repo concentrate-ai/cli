@@ -165,6 +165,7 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
+    version: 3,
     fetchedAt: Date.now() / 1000,
     models: [
       null,
@@ -219,4 +220,60 @@ test("reasoning metadata is provider-specific and conservative for automatic rou
   assert.equal(m.reasoningSupport, true);
   assert.equal(summarize(RAW("unknown")).reasoningSupport, null);
   assert.equal(summarize(RAW("unknown")).efforts, null);
+});
+
+const catalogPage = () =>
+  json({ data: [RAW("live-model")], has_more: false, last_id: null });
+
+test("a catalog that was fetched is returned even when the cache cannot be written", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root ignores directory modes");
+  const fs = await import("node:fs");
+  const dir = tempDir();
+  fs.chmodSync(dir, 0o500);
+  t.after(() => fs.chmodSync(dir, 0o700));
+  globalThis.fetch = async () => catalogPage();
+  const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
+  assert.equal(result.source, "live");
+  assert.deepEqual(
+    result.models.map((m) => m.id),
+    ["live-model"],
+  );
+});
+
+test("a cache from another format version is never served, even offline", async () => {
+  const dir = tempDir();
+  const { writeJson } = await import("../dist/lib/settings.js");
+  writeJson(`${dir}/catalog.json`, {
+    version: 1,
+    fetchedAt: Date.now() / 1000,
+    models: [{ id: "old-format" }],
+  });
+  await assert.rejects(
+    fetchCatalog({ env: { CN_CONFIG_HOME: dir, CN_OFFLINE: "1" } }),
+    /unavailable in offline mode/,
+  );
+  globalThis.fetch = async () => {
+    throw new Error("network down");
+  };
+  await assert.rejects(
+    fetchCatalog({ env: { CN_CONFIG_HOME: dir } }),
+    /Could not fetch/,
+  );
+});
+
+test("a cache dated in the future is refreshed rather than trusted forever", async () => {
+  const dir = tempDir();
+  const { writeJson } = await import("../dist/lib/settings.js");
+  writeJson(`${dir}/catalog.json`, {
+    version: 3,
+    fetchedAt: 9e12,
+    models: [{ id: "stale-model" }],
+  });
+  globalThis.fetch = async () => catalogPage();
+  const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
+  assert.equal(result.source, "live");
+  assert.deepEqual(
+    result.models.map((m) => m.id),
+    ["live-model"],
+  );
 });

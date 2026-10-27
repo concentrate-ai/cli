@@ -22,3 +22,25 @@ await build({
     js: `/* Third-party notices:\n${notices.replaceAll("*/", "* /")}\n*/`,
   },
 });
+await build({
+  entryPoints: ["src/lib/codex-daemon.ts", "src/lib/codex-relay.ts"],
+  outdir: "dist/lib",
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node18.18",
+  external: [
+    "./errors.js",
+    "./config-formats.js",
+    "./settings.js",
+    "./validation.js",
+    "bufferutil",
+    "utf-8-validate",
+  ],
+  banner: {
+    js: 'import { createRequire as cnCreateRequire } from "node:module"; const require = cnCreateRequire(import.meta.url);',
+  },
+  footer: {
+    js: `/* ws license:\n${fs.readFileSync("node_modules/ws/LICENSE", "utf8").replaceAll("*/", "* /")}\n*/`,
+  },
+});

@@ -38,6 +38,19 @@ function write(file, content) {
     fs.rmSync(temporary, { force: true });
   }
 }
+// A published version is immutable: pinned installs and their checksums rely on it.
+const published = path.join(
+  destination,
+  "downloads",
+  "cli",
+  `v${pkg.version}`,
+  name,
+);
+if (fs.existsSync(published) && !fs.readFileSync(published).equals(archive))
+  throw new Error(
+    `v${pkg.version} is already staged with different contents. Increment the package version instead of replacing it.`,
+  );
+// Archive before checksum, versioned copy before `latest`.
 for (const version of [`v${pkg.version}`, "latest"]) {
   const target = path.join(destination, "downloads", "cli", version);
   write(path.join(target, name), archive);

@@ -33,9 +33,14 @@ function databaseCommand(
   return result.stdout;
 }
 
+// state.vscdb lives in <Cursor>/User/globalStorage. Check the file and those
+// three folders, so a link inside Cursor's own data cannot redirect a write, but
+// a home folder that is itself reached through a link (common on Linux) is fine.
+const CURSOR_DATA_LEVELS = 4;
+
 export function privateDatabase(file: string) {
   let current = file;
-  for (;;) {
+  for (let level = 0; level < CURSOR_DATA_LEVELS; level += 1) {
     const stat = fs.lstatSync(current);
     if (
       stat.isSymbolicLink() ||

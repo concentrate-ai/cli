@@ -35,7 +35,7 @@ function fixture() {
   );
   fs.writeFileSync(
     path.join(bin, "curl"),
-    `#!${process.execPath}\nimportDummy();\nfunction importDummy(){const fs=require('node:fs');const path=require('node:path');const args=process.argv.slice(2);const url=args.find(arg=>arg.startsWith('https://'));fs.appendFileSync(process.env.CN_TEST_URLS,url+'\\n');const file=path.basename(new URL(url).pathname);fs.copyFileSync(path.join(process.env.CN_TEST_DOWNLOADS,file),args[args.indexOf('-o')+1]);}\n`,
+    `#!${process.execPath}\nimportDummy();\nfunction importDummy(){const fs=require('node:fs');const path=require('node:path');const args=process.argv.slice(2);const url=args.find(arg=>arg.startsWith('https://'));fs.appendFileSync(process.env.CN_TEST_URLS,url+'\\n');const file=path.basename(new URL(url).pathname);const out=args[args.indexOf('-o')+1];const stale=path.join(process.env.CN_TEST_DOWNLOADS,'SHA256SUMS.stale');if(file==='SHA256SUMS'&&fs.existsSync(stale)){fs.copyFileSync(stale,out);fs.rmSync(stale);return;}fs.copyFileSync(path.join(process.env.CN_TEST_DOWNLOADS,file),out);}\n`,
     { mode: 0o755 },
   );
   fs.writeFileSync(
@@ -79,16 +79,16 @@ function fixture() {
 }
 test("piped web install verifies a built release, needs no npm, preserves credentials and supports pinned releases", () => {
   const f = fixture();
-  const result = f.run({ CN_INSTALL_VERSION: "0.1.0" });
+  const result = f.run({ CN_INSTALL_VERSION: "0.1.1" });
   assert.equal(result.status, 0, result.stderr);
   const version = spawnSync(f.launcher, ["--version"], {
     env: f.env,
     encoding: "utf8",
   });
-  assert.equal(version.stdout.trim(), "0.1.0");
+  assert.equal(version.stdout.trim(), "0.1.1");
   assert.match(
     fs.readFileSync(f.env.CN_TEST_URLS, "utf8"),
-    /https:\/\/concentrate\.ai\/downloads\/cli\/v0\.1\.0\/concentrate-cli.tar.gz/,
+    /https:\/\/concentrate\.ai\/downloads\/cli\/v0\.1\.1\/concentrate-cli.tar.gz/,
   );
   assert.equal(fs.existsSync(path.join(f.runtime, "node_modules")), false);
   assert.equal(
@@ -147,4 +147,22 @@ test("web installer refuses an unrelated cn and invalid release selectors", () =
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /different cn command/);
   assert.match(fs.readFileSync(f.launcher, "utf8"), /unrelated/);
+});
+test("a checksum file from the previous release is retried instead of failing the install", () => {
+  const f = fixture();
+  fs.writeFileSync(
+    path.join(f.downloads, "SHA256SUMS.stale"),
+    `${"0".repeat(64)}  concentrate-cli.tar.gz\n`,
+  );
+  const result = f.run();
+  assert.equal(result.status, 0, result.stderr);
+  const urls = fs.readFileSync(f.env.CN_TEST_URLS, "utf8").trim().split("\n");
+  assert.equal(urls.filter((url) => url.endsWith("SHA256SUMS")).length, 2);
+});
+test("bash users on macOS or with a .bash_profile are told to edit .bash_profile", () => {
+  const f = fixture();
+  fs.writeFileSync(path.join(f.home, ".bash_profile"), "");
+  const result = f.run({ SHELL: "/bin/bash" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Add this line to .*\.bash_profile/);
 });

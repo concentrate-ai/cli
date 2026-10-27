@@ -23,6 +23,9 @@ import {
   visibleWidth,
 } from "./term.js";
 import { glyphs } from "./theme.js";
+import { fullScreenActive } from "./screen.js";
+import { wordmark } from "./brand.js";
+import { version } from "../version.js";
 
 export function interactive(env: Environment = process.env) {
   return (
@@ -423,6 +426,117 @@ export function renderSelect(
   return lines;
 }
 
+// A fixed header and footer surround a scrolling menu. Detail moves alongside
+// the menu on wide terminals, and below it on smaller ones.
+export function renderWorkspace(
+  state: SelectState,
+  options: Omit<SelectOptions, "items">,
+  c: TerminalCapabilities,
+  height: number,
+) {
+  const width = Math.max(10, c.width);
+  const g = glyphs(c);
+  const rule = paint("edge", g.rule.repeat(width), {}, c);
+  const spread = (left: string, right: string) =>
+    clip(left, Math.max(0, width - visibleWidth(right) - 1)) +
+    " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right))) +
+    right;
+  const heading = [
+    spread(`  ${wordmark(c)}`, paint("mute", `v${version()}  `, {}, c)),
+    `  ${paint("mute", options.title || "Workspace", {}, c)}`,
+    ...(options.status ? [`  ${options.status}`] : []),
+    rule,
+  ];
+  const footer = [
+    rule,
+    ...(options.legend ? [`  ${options.legend}`] : []),
+    hints(
+      options.hints ?? [
+        [`${g.up}${g.down}`, "move"],
+        [g.enter, "select"],
+        ["esc", "back"],
+      ],
+      c,
+    ),
+  ];
+  const bodyHeight = Math.max(1, height - heading.length - footer.length);
+  const focused = visible(state)[state.cursor];
+  const detail =
+    focused && options.detail ? options.detail(focused).join(" ") : "";
+  const split = width >= 92 && bodyHeight >= 10 && Boolean(detail);
+  const leftWidth = split ? Math.floor(width * 0.59) : width;
+  const detailWidth = split ? width - leftWidth - 4 : width - 6;
+  const detailLines = detail ? wrap(detail, Math.max(4, detailWidth)) : [];
+  const below =
+    split || !detail
+      ? []
+      : [
+          "",
+          ...detailLines
+            .slice(0, Math.min(4, Math.max(1, bodyHeight - 6)))
+            .map((line) => `   ${paint("mute", line, {}, c)}`),
+        ];
+  const menuHeight = Math.max(1, bodyHeight - below.length);
+  const list = visible(state);
+  const menu: string[] = [];
+  if (state.filterable && menuHeight >= 4)
+    menu.push(
+      `  ${paint("focus", g.info, {}, c)} ${state.query || paint("mute", "type to filter", {}, c)}${paint("focus", g.caret, {}, c)}`,
+    );
+  const rows = Math.max(
+    1,
+    menuHeight - menu.length - (menuHeight >= 4 ? 2 : 0),
+  );
+  const offset = Math.min(
+    Math.max(0, state.cursor - Math.floor(rows / 2)),
+    Math.max(0, list.length - rows),
+  );
+  if (menuHeight >= 4)
+    menu.push(
+      offset ? `  ${paint("mute", `${g.up} ${offset} more`, {}, c)}` : "",
+    );
+  const cols = columns(list);
+  list
+    .slice(offset, offset + rows)
+    .forEach((item, index) =>
+      menu.push(
+        renderRow(item, offset + index === state.cursor, cols, leftWidth, c),
+      ),
+    );
+  if (!list.length)
+    menu.push(
+      `  ${paint("mute", "No matching models. Try another search.", {}, c)}`,
+    );
+  if (menuHeight >= 4 && offset + rows < list.length)
+    menu.push(
+      `  ${paint("mute", `${g.down} ${list.length - offset - rows} more`, {}, c)}`,
+    );
+  const body = Array.from({ length: bodyHeight }, (_, index) => {
+    const left =
+      index < menuHeight
+        ? (menu[index] ?? "")
+        : (below[index - menuHeight] ?? "");
+    if (!split) return left;
+    const right =
+      index === 1
+        ? paint(
+            "text",
+            focused?.note || focused?.label || "",
+            { bold: true },
+            c,
+          )
+        : index === 3 && focused?.meta
+          ? paint("core", fit(focused.meta, detailWidth), {}, c)
+          : index >= 5
+            ? paint("mute", detailLines[index - 5] ?? "", {}, c)
+            : "";
+    return `${pad(clip(left, leftWidth), leftWidth)} ${paint("edge", g.v, {}, c)}  ${right}`;
+  });
+  return [...heading, ...body, ...footer]
+    .slice(0, height)
+    .map((line) => clip(line, width));
+}
+
 // Settles a widget exactly once, always giving the terminal back first.
 function settleOnce(cleanup: () => void) {
   let done = false;
@@ -439,32 +553,49 @@ function settleOnce(cleanup: () => void) {
 
 export function select(options: SelectOptions, env: Environment = process.env) {
   const out = process.stdout;
-  const c = caps(env, out);
+  let c = caps(env, out);
+  const fullscreen = fullScreenActive() && options.fullscreen !== false;
   let state = createSelect(options.items, options);
-  let printed = 0;
+  // Visible width of each printed line, so a resize that rewraps them is counted.
+  let printed: number[] = [];
   const erase = () => {
-    if (printed) out.write(`\x1b[${printed}A\r\x1b[J`);
-    printed = 0;
+    if (fullscreen) {
+      out.write("\x1b[H\x1b[J");
+      return;
+    }
+    const columns = Math.max(1, out.columns || 80);
+    const rows = printed.reduce(
+      (total, width) => total + Math.max(1, Math.ceil(width / columns)),
+      0,
+    );
+    if (rows) out.write(`\x1b[${rows}A\r\x1b[J`);
+    printed = [];
   };
   // Lines are clipped to the terminal so none wraps; otherwise the redraw would miscount.
   const draw = () => {
-    const columns = Math.max(20, (out.columns || 80) - 1);
-    const lines = renderSelect(state, options, c).map((line) =>
-      clip(line, columns),
-    );
+    c = caps(env, out);
+    const columns = Math.max(1, (out.columns || 80) - 1);
+    const height = Math.max(1, (out.rows || 24) - 1);
+    const lines = (
+      fullscreen
+        ? renderWorkspace(state, options, { ...c, width: columns }, height)
+        : renderSelect(state, options, c)
+    ).map((line) => clip(line, columns));
     erase();
     out.write(lines.join("\n") + "\n");
-    printed = lines.length;
+    printed = lines.map(visibleWidth);
   };
   return new Promise<Selection>((resolve, reject) => {
     let stop = () => {};
     const finish = settleOnce(() => {
       stop();
+      out.off("resize", draw);
       erase();
     });
     const fail = (error: unknown) => finish(() => reject(error));
     try {
       hideCursor(out);
+      out.on("resize", draw);
       stop = readKeys((key) => {
         state = reduce(state, key);
         if (!state.done) return draw();
@@ -514,7 +645,7 @@ export function password(
       stop = readKeys((key) => {
         if (key.name === "enter" || key.name === "eof")
           return finish(() => resolve(value.trim()));
-        if (key.name === "interrupt")
+        if (key.name === "interrupt" || key.name === "escape")
           return finish(() => reject(new CnError("Cancelled", 130)));
         if (key.name === "backspace") value = value.slice(0, -1);
         else if (key.name === "clear") value = "";

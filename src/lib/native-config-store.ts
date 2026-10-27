@@ -165,6 +165,79 @@ export function withSetupLock<T>(directory: string, work: () => T): T {
   }
 }
 
+const sameKey = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((part, i) => part === b[i]);
+
+function leaves(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") out.push(value);
+  else if (Array.isArray(value)) for (const item of value) leaves(item, out);
+  else if (isRecord(value))
+    for (const item of Object.values(value)) leaves(item, out);
+  return out;
+}
+
+// Does a setting that survives Reset still point at this cn-owned file?
+const referencedBy = (kept: string[], file: string) =>
+  kept.some(
+    (text) =>
+      text.includes(file) ||
+      (path.isAbsolute(text) && file.startsWith(text + path.sep)),
+  );
+
+// Undo cn's changes in a file that may have been edited since. Settings the user
+// changed are left alone and reported; with `all`, every change is undone.
+function revertChanges(
+  file: Snapshot,
+  current: string,
+  {
+    preserved,
+    kept,
+    all = false,
+  }: {
+    preserved?: string[];
+    kept?: string[];
+    all?: boolean;
+  } = {},
+) {
+  let text = current;
+  const currentDoc = parseConfig(current, file.format);
+  const writtenDoc = parseConfig(file.written, file.format);
+  const originalDoc = parseConfig(file.original ?? "", file.format);
+  for (const change of file.changes) {
+    if (change.retainOnEditedFile && !all) {
+      kept?.push(...leaves(change.value));
+      continue;
+    }
+    if (
+      !isDeepStrictEqual(
+        get(currentDoc, change.key),
+        get(writtenDoc, change.key),
+      )
+    ) {
+      preserved?.push(`${file.file}: ${change.key.join(".")}`);
+      kept?.push(...leaves(get(currentDoc, change.key)));
+      continue;
+    }
+    text = setConfig(
+      text,
+      file.format,
+      change.key,
+      get(originalDoc, change.key),
+    );
+    for (let i = change.key.length - 1; i > 0; i--) {
+      const parent = change.key.slice(0, i);
+      const value = get(parseConfig(text, file.format), parent);
+      if (
+        get(originalDoc, parent) === undefined &&
+        isRecord(value) &&
+        !Object.keys(value).length
+      )
+        text = setConfig(text, file.format, parent, undefined);
+    }
+  }
+  return text;
+}
+
 export function applyNativeSetup(state: string, plans: ConfigPlan[]) {
   const old = receipt(
     state,
@@ -205,9 +278,23 @@ export function applyNativeSetup(state: string, plans: ConfigPlan[]) {
       written = setConfig(written, plan.format, change.key, change.value);
     }
     parseConfig(written, plan.format);
+    // Edits made since the last Configure belong to the user: fold them into the
+    // baseline so Reset cannot restore the very first copy over them.
+    const original = !previous
+      ? current
+      : current === null || current === previous.written
+        ? previous.original
+        : revertChanges(previous, current, { all: true });
     snapshots.push({
       ...plan,
-      original: previous ? previous.original : current,
+      // Keep tracking settings an earlier Configure wrote that this plan no longer sets.
+      changes: [
+        ...plan.changes,
+        ...(previous?.changes.filter(
+          (old) => !plan.changes.some((change) => sameKey(change.key, old.key)),
+        ) ?? []),
+      ],
+      original,
       written,
     });
   }
@@ -241,6 +328,7 @@ export function applyNativeSetup(state: string, plans: ConfigPlan[]) {
       replaceFile(
         file.file,
         before.find((entry) => entry.file === file.file)?.text ?? null,
+        file.mode,
       );
     }
     if (fullyRestored) replaceFile(state, previousState);
@@ -252,53 +340,29 @@ export function resetNativeSetup(state: string, allowed: string[]) {
   const saved = receipt(state, allowed);
   if (!saved?.active) return { reset: false, preserved: [] as string[] };
   const preserved: string[] = [];
+  // Settings that stay in place and may still point at files cn created.
+  const kept: string[] = [];
   const updates: { file: string; text: string | null; mode?: number }[] = [];
   // Plan every change before writing. A malformed file leaves the entire setup intact.
   for (const file of saved.files.filter((entry) => entry.format !== "text")) {
     const current = readConfigFile(file.file);
-    if (current === null) continue; // A user deletion is also an edit.
+    if (current === null) {
+      // A user deletion is also an edit: keep the record that holds the original.
+      preserved.push(file.file);
+      continue;
+    }
     if (current === file.written) {
       updates.push({ file: file.file, text: file.original });
       continue;
     }
-    let text = current;
-    const currentDoc = parseConfig(current, file.format);
-    const writtenDoc = parseConfig(file.written, file.format);
-    const originalDoc = parseConfig(file.original ?? "", file.format);
-    for (const change of file.changes) {
-      if (change.retainOnEditedFile) continue;
-      if (
-        !isDeepStrictEqual(
-          get(currentDoc, change.key),
-          get(writtenDoc, change.key),
-        )
-      ) {
-        preserved.push(`${file.file}: ${change.key.join(".")}`);
-        continue;
-      }
-      text = setConfig(
-        text,
-        file.format,
-        change.key,
-        get(originalDoc, change.key),
-      );
-      for (let i = change.key.length - 1; i > 0; i--) {
-        const parent = change.key.slice(0, i);
-        const value = get(parseConfig(text, file.format), parent);
-        if (
-          get(originalDoc, parent) === undefined &&
-          isRecord(value) &&
-          !Object.keys(value).length
-        )
-          text = setConfig(text, file.format, parent, undefined);
-      }
-    }
+    const text = revertChanges(file, current, { preserved, kept });
     updates.push({ file: file.file, text });
   }
   for (const file of saved.files.filter((entry) => entry.format === "text")) {
     const current = readConfigFile(file.file);
     if (current === null) continue;
-    if (preserved.length || current !== file.written) preserved.push(file.file);
+    if (current !== file.written || referencedBy(kept, file.file))
+      preserved.push(file.file);
     else
       updates.push({ file: file.file, text: file.original, mode: file.mode });
   }

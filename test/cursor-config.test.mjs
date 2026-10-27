@@ -271,3 +271,24 @@ test("Cursor rejects malformed restore records without changing credentials", ()
   assert.throws(() => resetCursor(f.env), /restore record is invalid/);
   assert.deepEqual(rowsOf(f), before);
 });
+
+test("Cursor accepts a home folder reached through a symlink but not links inside Cursor's own folders", () => {
+  const f = fixture();
+  const home = f.env.HOME;
+  const alias = path.join(path.dirname(home), `alias-${path.basename(home)}`);
+  fs.symlinkSync(home, alias);
+  const viaAlias = { ...f.env, HOME: alias };
+  assert.doesNotThrow(() =>
+    configureCursor(ROOT, "sk-dummy", models, viaAlias),
+  );
+  assert.equal(cursorConfigured(viaAlias), true);
+  // A link on the path inside Cursor's data folder is still refused.
+  const user = path.dirname(path.dirname(f.database));
+  const moved = `${user}.real`;
+  fs.renameSync(user, moved);
+  fs.symlinkSync(moved, user);
+  assert.throws(
+    () => configureCursor(ROOT, "sk-dummy", models, f.env),
+    /symbolic link/,
+  );
+});

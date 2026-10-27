@@ -132,7 +132,7 @@ async function chooseModel(
   current: string,
   catalog: Model[],
   env: Environment,
-) {
+): Promise<string | null> {
   if (!interactive()) return promptModelPlain(harnessId, current, catalog, env);
   const c = caps();
   current = routingModelId(catalog, current);
@@ -153,7 +153,8 @@ async function chooseModel(
       ["esc", `keep ${current}`],
     ],
   });
-  if (result.cancel) return current;
+  // Cancelling keeps the current default and changes nothing.
+  if (result.cancel) return null;
   return routingModelId(catalog, result.value);
 }
 
@@ -256,7 +257,8 @@ export async function runSetup(
       );
     }
     for (const id of HARNESS_IDS) {
-      models[id] = await chooseModel(id, models[id], catalog, env);
+      models[id] =
+        (await chooseModel(id, models[id], catalog, env)) ?? models[id];
       console.log(
         ledger("ok", getHarness(id as HarnessId).label, models[id], c),
       );
@@ -441,7 +443,14 @@ export async function runModel(
     } catch {
       // continue with an empty catalog; the user can still type an ID
     }
-    models[target] = await chooseModel(target, models[target], catalog, env);
+    const chosen = await chooseModel(target, models[target], catalog, env);
+    if (chosen === null) {
+      console.log(
+        ledger("mute", getHarness(target).label, `kept ${models[target]}`),
+      );
+      return 0;
+    }
+    models[target] = chosen;
   }
   writePreferences(models, env);
   if (toolConfigured(target, env)) {
@@ -534,12 +543,30 @@ export async function runDoctor(
   const { key, source } = resolveKey(env);
   const c = caps();
   console.log(ledger(key ? "ok" : "bad", "api key", source, c));
+  const fromEnv = environmentKey(env);
+  if (source === "stored" && fromEnv && fromEnv !== key)
+    console.log(
+      ledger(
+        "warn",
+        "api key",
+        "CONCENTRATE_API_KEY in your shell differs from the saved key. cn uses the saved key.",
+        c,
+      ),
+    );
   if (!target) {
     for (const adapter of listHarnesses()) {
       const found = which(adapter.binary, env.PATH);
+      const setup = toolConfigured(adapter.id, env)
+        ? ` ${paint("mute", "· configured permanently", {}, c)}`
+        : "";
       console.log(
         found
-          ? ledger("ok", adapter.label, withVersion(found, adapter, c), c)
+          ? ledger(
+              "ok",
+              adapter.label,
+              withVersion(found, adapter, c) + setup,
+              c,
+            )
           : `${ledger("bad", adapter.label, "not installed", c)}\n    ${paint("mute", adapter.installHint, {}, c)}`,
       );
     }

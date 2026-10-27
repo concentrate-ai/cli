@@ -22,14 +22,17 @@ Rerun the same command to update.
 To install a particular release:
 
 ```sh
-curl -fsSL https://concentrate.ai/cli/install.sh | CN_INSTALL_VERSION=0.1.0 bash
+curl -fsSL https://concentrate.ai/cli/install.sh | CN_INSTALL_VERSION=0.1.1 bash
 ```
 
 If `~/.local/bin` is not on your `PATH`, the installer prints the line to add to
 your shell profile. For a source checkout, run `npm ci` and `./install.sh` instead.
 Source installs require npm to compile the TypeScript code.
 
-`cn` opens a menu for launching tools, Configure, Reset, Settings, Models, and Doctor.
+`cn` opens a full-screen workspace for launching tools, Configure, Reset, Settings,
+Models, and Doctor. Quitting restores your shell without leaving menus in its
+scrollback. The layout adjusts when you resize the terminal.
+The Cursor desktop row opens its Configure and Reset controls.
 Settings lets you choose each tool’s default model and save or replace your API key.
 Launching a tool without a key starts setup. You can also use an existing
 `CONCENTRATE_API_KEY` environment variable.
@@ -53,6 +56,47 @@ Pass tool-specific arguments after `--`:
 cn codex -- exec "Say hello"
 cn opencode -- run "Say hello"
 ```
+
+## Resume a conversation
+
+Exit the agent, then run the resume command from the same project directory:
+
+```sh
+cn claude resume <session-id>
+cn codex resume <session-id>
+cn opencode resume <session-id>
+cn pi resume <session-id-or-path>
+```
+
+For any of these tools, omit the ID to pick a conversation, or use
+`cn <tool> continue` for the most recent conversation in the current project.
+A resumed conversation starts on the tool's cn default model (`cn model <tool>`), not
+necessarily the model it last used. Use `cn <tool> --model <model-id> resume <session-id>`
+to choose another one. For Codex, `continue` and the picker list interactive sessions
+only; add `--include-non-interactive` to include scripted runs and subagent threads.
+
+Use the same OS account and configuration directory that saved the session.
+Codex's picker includes sessions started with other providers. Pi searches both
+its normal session directory and cn's existing session directory; explicit
+`--session-dir` overrides are respected. OpenCode v2 uses its model-switch API
+to select Concentrate before opening the saved session. OpenCode v1 uses its
+native model flag.
+
+For an idle conversation retained by Codex's local background server, cn
+reconnects to that server and verifies the Concentrate connection before allowing
+a prompt. The conversation keeps its ID. Active tasks are left running, and cn
+does not change your global Codex provider or saved ChatGPT login. Use the
+`cn codex resume <session-id>` command printed by cn when you exit. cn serves your key
+to that server from memory, so once cn exits the conversation can no longer use it
+until you resume through cn again.
+
+You can resume a locally saved conversation after reaching a subscription's
+usage limit. New model requests use your Concentrate API key and API billing;
+your subscription login stays saved. Resuming sends the conversation context
+needed for the next request through Concentrate. This continues a session in
+the same agent; it does not transfer conversations between different agents.
+If you change models, choose one that supports the conversation's inputs and
+has enough context capacity for its history.
 
 ## Models and providers
 
@@ -104,19 +148,19 @@ for differences between permanent configuration and a session launched through `
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `cn settings` | Open interactive settings |
-| `cn configure <tool>` | Save Concentrate in a tool’s native settings |
-| `cn reset <tool>` | Restore that tool’s previous settings |
-| `cn setup` | Set up your API key |
-| `cn config` | Show key status, default models, and routing status |
-| `cn key` | Replace the saved API key |
-| `cn logout` | Remove the saved API key |
-| `cn doctor` | Check tool installations and key status |
-| `cn doctor <tool>` | Test a tool's API route with a live request |
-| `cn reset` | Restore configured tools and remove cn’s key, models, and cache |
-| `cn --help` | Show all commands and options |
+| Command               | Description                                                     |
+| --------------------- | --------------------------------------------------------------- |
+| `cn settings`         | Open interactive settings                                       |
+| `cn configure <tool>` | Save Concentrate in a tool’s native settings                    |
+| `cn reset <tool>`     | Restore that tool’s previous settings                           |
+| `cn setup`            | Set up your API key                                             |
+| `cn config`           | Show key status, default models, and routing status             |
+| `cn key`              | Replace the saved API key                                       |
+| `cn logout`           | Remove the saved API key                                        |
+| `cn doctor`           | Check tool installations and key status                         |
+| `cn doctor <tool>`    | Test a tool's API route with a live request                     |
+| `cn reset`            | Restore configured tools and remove cn’s key, models, and cache |
+| `cn --help`           | Show all commands and options                                   |
 
 ## Configuration
 

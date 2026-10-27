@@ -42,7 +42,7 @@ test("source install produces a self-contained CLI and launches all four adapter
   const cn = path.join(home, ".local/bin/cn");
   const run = (args) =>
     spawnSync(cn, args, { env, encoding: "utf8", timeout: 10000 });
-  assert.equal(run(["--version"]).stdout.trim(), "0.1.0");
+  assert.equal(run(["--version"]).stdout.trim(), "0.1.1");
   assert.match(run(["--help"]).stdout, /claude, codex, opencode, pi/);
   const models = ["small", "large"].map((id) =>
     summarize({

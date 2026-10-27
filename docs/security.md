@@ -19,10 +19,9 @@ Not prevented: the coding agent itself runs commands with that environment, so a
 
 Claude, Codex, and Pi use command-backed helpers that resolve the saved key at request time. OpenCode references a separate private key file through its native file substitution; `cn key` rotates that file when it is still managed by cn. `cn logout` resets OpenCode’s saved integration.
 
-Restore records can contain the previous tool configuration, including secrets that were already there. They are stored in private directories with mode `0600`. Reset removes a completed restore record; if user edits require keeping files, it retains the record for recovery and reports the edits. Native Configure does not change shell startup files or replace tool executables.
+Restore records can contain the previous tool configuration, including secrets that were already there. They are stored in private directories (mode `0700`) as files restricted to mode `0600`. Reset removes a completed restore record; if user edits require keeping files, it retains the record for recovery and reports the edits. Native Configure does not change shell startup files or replace tool executables.
 
 Claude’s permanent capability plugin is prepared with the installed client in an isolated home using a local marketplace. The managed plugin contains model metadata and code, not API keys. Reset restores cn-owned settings and plugin registrations while preserving other plugins and later edits. Higher-priority managed or project configuration can still affect the client.
-
 
 ## Cursor desktop
 

@@ -20,6 +20,7 @@ import { CnError, EXIT } from "./errors.js";
 import { getHarness } from "./harnesses/registry.js";
 import { readPreferences, resolveKey, writePreferences } from "./settings.js";
 import { ledger } from "./ui/layout.js";
+import { hasOption, resolveSessionArgs } from "./sessions.js";
 
 export { which } from "./executables.js";
 import { which } from "./executables.js";
@@ -62,6 +63,21 @@ function run(
 }
 
 // A model given to the tool directly is a one-off choice, not a new default.
+function isResume(harnessId: HarnessId, args: string[]) {
+  if (harnessId === "codex")
+    return args[0] === "resume" || (args[0] === "exec" && args[1] === "resume");
+  return hasOption(
+    args,
+    "--resume",
+    "-r",
+    "--continue",
+    "-c",
+    "--session",
+    "-s",
+    "--cn-resume",
+  );
+}
+
 function passesModelFlag(forwarded: string[], flags: readonly string[] = []) {
   return forwarded.some((arg) =>
     flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
@@ -120,6 +136,14 @@ export async function launch(
 
   const { key } = resolveKey(env);
   if (!key) throw new CnError("No API key found. Run cn setup first.");
+  const sessionArgs = await resolveSessionArgs(
+    harnessId,
+    executable,
+    forwarded,
+    env,
+  );
+  if (sessionArgs === null) return 0;
+  forwarded = sessionArgs;
 
   let model = override || readPreferences(env)[harnessId];
   let available: Model[];
@@ -135,6 +159,15 @@ export async function launch(
     );
     available = ensureModel([], model);
   }
+
+  if (tty && isResume(harnessId, forwarded))
+    console.error(
+      ledger(
+        "ok",
+        "resume",
+        `Continuing on ${model} through Concentrate. Requests are billed at API rates.`,
+      ),
+    );
 
   const prepared = await adapter.prepare({
     executable,
@@ -180,5 +213,7 @@ export async function launch(
   } finally {
     prepared.cleanup();
   }
+  if (tty && prepared.resumeHint)
+    console.error(`Resume through Concentrate: ${prepared.resumeHint}`);
   return code;
 }

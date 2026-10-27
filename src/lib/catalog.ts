@@ -205,31 +205,39 @@ export async function fetchCatalog({
   } catch {
     cached = {};
   }
-  const saved = Array.isArray(cached.models)
-    ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
-    : null;
-  const fresh =
-    cached.version === 3 &&
-    saved &&
+  // A cache written by another format version is not trustworthy, online or off.
+  const current = cached.version === 3;
+  const saved =
+    current && Array.isArray(cached.models)
+      ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
+      : null;
+  const age =
     Date.now() / 1000 -
-      (typeof cached.fetchedAt === "number" ? cached.fetchedAt : 0) <
-      CACHE_SECONDS;
+    (typeof cached.fetchedAt === "number" ? cached.fetchedAt : 0);
+  // A timestamp in the future (clock skew, a hand-edited file) is never fresh.
+  const fresh = saved && age >= 0 && age < CACHE_SECONDS;
   if (!refresh && fresh) return { models: saved, source: "cache" };
   if (env.CN_OFFLINE === "1") {
     if (saved) return { models: saved, source: "offline cache" };
     throw new CnError("Model catalog is unavailable in offline mode");
   }
+  let models: Model[];
   try {
-    const models = (await fetchAllPages())
+    models = (await fetchAllPages())
       .map(summarize)
       .filter((m): m is Model => m !== null)
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    writeJson(file, { version: 3, fetchedAt: Date.now() / 1000, models });
-    return { models, source: "live" };
   } catch {
     if (saved) return { models: saved, source: "stale cache" };
     throw new CnError("Could not fetch the Concentrate AI model catalog");
   }
+  // The list is good even when it cannot be saved (read-only or full disk).
+  try {
+    writeJson(file, { version: 3, fetchedAt: Date.now() / 1000, models });
+  } catch {
+    /* The next run fetches again. */
+  }
+  return { models, source: "live" };
 }
 
 export function routingModels(models: Model[]) {

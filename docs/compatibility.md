@@ -72,7 +72,6 @@ its own built-in identification header. No user or session information is added.
 Reset uses the normal restore record to remove cn's configuration changes.
 The gateway must read this header before it can use it for reporting or routing.
 
-
 ## Cursor desktop
 
 `cn configure cursor` configures the Cursor desktop editor, following the native

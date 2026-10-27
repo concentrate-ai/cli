@@ -19,6 +19,7 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 if (args[0] === "--help") { console.log(process.env.FAKE_OC === "v2" ? "FLAGS\\n  --standalone  Run with a private server" : "Commands:\\n  opencode run"); process.exit(0); }
 if (args[0] === "--version") { console.log(process.env.FAKE_OC === "v2" ? "opencode v2.0.20" : "1.19.0"); process.exit(0); }
+if (args[0] === "session" && args[1] === "list") { console.log(JSON.stringify([{ id: "ses_existing", title: "Existing conversation", directory: process.cwd(), updated: 1 }])); process.exit(0); }
 fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, config: process.env.OPENCODE_CONFIG_CONTENT, key: process.env.CONCENTRATE_API_KEY }));
 `,
     { mode: 0o755 },
@@ -45,7 +46,7 @@ test("v2: the private-server flag is added, after the subcommand when there is o
     "json",
   ]);
   runCn(["opencode", "--", "--continue"], { env });
-  assert.deepEqual(seen().args, ["--standalone", "--continue"]);
+  assert.deepEqual(seen().args, ["--standalone", "--session", "ses_existing"]);
 });
 
 test("v1: the flag is never passed, because v1 rejects it", () => {
@@ -54,6 +55,21 @@ test("v1: the flag is never passed, because v1 rejects it", () => {
   assert.deepEqual(seen().args, ["run", "say hi"]);
   runCn(["opencode"], { env });
   assert.deepEqual(seen().args, []);
+});
+
+test("v1 resume explicitly selects the Concentrate model instead of the session's former provider", () => {
+  const { env, seen } = rig("v1");
+  const result = runCn(
+    ["opencode", "--model", "chosen", "resume", "ses_existing"],
+    { env },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(seen().args, [
+    "--model",
+    "concentrate/chosen",
+    "--session",
+    "ses_existing",
+  ]);
 });
 
 test("both versions get native provider config, with the key by reference only", () => {

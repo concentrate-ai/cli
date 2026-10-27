@@ -3,7 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import { parseFlags, parseLaunchArgs } from "../dist/lib/cli.js";
+import {
+  parseFlags,
+  parseLaunchArgs,
+  parseHarnessLaunchArgs,
+} from "../dist/lib/cli.js";
 import { fakeTool, runCn, tempDir } from "./helpers.mjs";
 
 function setup(extraEnv = {}) {
@@ -22,8 +26,84 @@ function setup(extraEnv = {}) {
   };
 }
 
+test("Claude session aliases preserve IDs, native flags, model overrides, and literal prompts", () => {
+  assert.deepEqual(
+    parseHarnessLaunchArgs("claude", ["resume", "saved-session"]),
+    { model: undefined, forwarded: ["--resume", "saved-session"] },
+  );
+  assert.deepEqual(parseHarnessLaunchArgs("claude", ["continue"]).forwarded, [
+    "--continue",
+  ]);
+  assert.deepEqual(parseHarnessLaunchArgs("claude", ["resume"]).forwarded, [
+    "--resume",
+  ]);
+  assert.deepEqual(
+    parseHarnessLaunchArgs("claude", [
+      "--model",
+      "claude-sonnet-5",
+      "resume",
+      "saved-session",
+    ]),
+    { model: "claude-sonnet-5", forwarded: ["--resume", "saved-session"] },
+  );
+  assert.deepEqual(
+    parseHarnessLaunchArgs("claude", ["--", "resume"]).forwarded,
+    ["resume"],
+  );
+  assert.deepEqual(
+    parseHarnessLaunchArgs("claude", [
+      "resume",
+      "saved-session",
+      "--",
+      "continue",
+    ]).forwarded,
+    ["--resume", "saved-session", "--", "continue"],
+  );
+  assert.deepEqual(
+    parseHarnessLaunchArgs("claude", ["--resume", "saved-session"]).forwarded,
+    ["--resume", "saved-session"],
+  );
+  assert.deepEqual(
+    parseHarnessLaunchArgs("codex", ["resume", "saved-session"]).forwarded,
+    ["resume", "saved-session"],
+  );
+});
+
+test("Claude resume uses Concentrate without assigning a new session or changing saved login", () => {
+  for (const args of [
+    ["resume", "saved-session"],
+    ["resume"],
+    ["continue"],
+    ["--resume", "saved-session"],
+    ["--continue"],
+  ]) {
+    const directory = tempDir("cn-existing-claude-");
+    const login = path.join(directory, ".credentials.json");
+    const original =
+      '{"claudeAiOauth":{"accessToken":"synthetic-subscription-token"}}';
+    fs.writeFileSync(login, original);
+    const { bin, env } = setup({ CLAUDE_CONFIG_DIR: directory });
+    const record = fakeTool(bin, "claude");
+    const result = runCn(["claude", ...args], { env });
+    assert.equal(result.status, 0, result.stderr);
+    const seen = record();
+    assert.equal(seen.args.includes("--session-id"), false);
+    assert.deepEqual(
+      seen.args.slice(-args.length),
+      args[0] === "resume" || args[0] === "continue"
+        ? [`--${args[0]}`, ...args.slice(1)]
+        : args,
+    );
+    assert.equal(seen.env.ANTHROPIC_BASE_URL, "https://api.concentrate.ai");
+    assert.equal(seen.env.CN_CLAUDE_KEY, "sk-test");
+    assert.equal(fs.readFileSync(login, "utf8"), original);
+  }
+});
+
 test("a missing tool fails fast with exit 127, an install hint, and no key or network needed", () => {
-  const { env } = setup({ CONCENTRATE_API_KEY: "" });
+  const { bin, env } = setup({ CONCENTRATE_API_KEY: "" });
+  // Node's own directory can also contain globally installed coding agents.
+  env.PATH = bin;
   const result = runCn(["codex"], { env });
   assert.equal(result.status, 127);
   assert.match(result.stderr, /Codex CLI isn't installed/);
@@ -131,6 +211,7 @@ test("claude receives catalog context limits for custom and provider-pinned mode
     fs.writeFileSync(
       path.join(config, "catalog.json"),
       JSON.stringify({
+        version: 3,
         fetchedAt: Date.now() / 1000,
         models: [{ id: "glm-5.3", name: "GLM", claude: true, context: 202752 }],
       }),
@@ -156,6 +237,7 @@ test("claude respects a user's explicit context limit instead of the catalog", (
   fs.writeFileSync(
     path.join(config, "catalog.json"),
     JSON.stringify({
+      version: 3,
       fetchedAt: Date.now() / 1000,
       models: [{ id: "glm-5.3", name: "GLM", claude: true, context: 202752 }],
     }),
@@ -178,6 +260,7 @@ test("claude gets no invented context limit for missing metadata or native Claud
     fs.writeFileSync(
       path.join(config, "catalog.json"),
       JSON.stringify({
+        version: 3,
         fetchedAt: Date.now() / 1000,
         models: [
           {
@@ -212,6 +295,7 @@ test("claude's picker includes every compatible model beyond the former shortlis
   fs.writeFileSync(
     path.join(config, "catalog.json"),
     JSON.stringify({
+      version: 3,
       fetchedAt: Date.now() / 1000,
       models: [
         ...models,

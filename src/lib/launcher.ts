@@ -21,7 +21,6 @@ import {
 import { launch, which } from "./launch.js";
 import { getHarness, listHarnesses } from "./harnesses/registry.js";
 import { needsSetup, readPreferences, resolveKey } from "./settings.js";
-import { focusIn, header } from "./ui/brand.js";
 import { caps, paint } from "./ui/term.js";
 import { glyphs } from "./ui/theme.js";
 import { select } from "./ui/widgets.js";
@@ -29,7 +28,7 @@ import { configureTool, resetTool, toolConfigured } from "./tool-config.js";
 import { CnError } from "./errors.js";
 import { errorMessage } from "./validation.js";
 import { ledger } from "./ui/layout.js";
-import { version } from "./version.js";
+import { clearScreen, openScreen } from "./ui/screen.js";
 
 const MANAGE: MenuItem[] = [
   {
@@ -93,7 +92,7 @@ export function menuItems(env: Environment, c = caps()) {
       ready: installed && Boolean(key),
       about: !installed
         ? adapter.installHint
-        : `Starts ${adapter.label} on ${preferences[adapter.id]}. Change it with cn model ${adapter.id}.`,
+        : `Launch ${adapter.label} with ${preferences[adapter.id]} through Concentrate for this session. Uses your Concentrate key. Your existing subscription and login stay saved. Choose Configure to use Concentrate for direct launches too.`,
     };
   });
   const ready = tools.filter((tool) => tool.ready).length;
@@ -102,9 +101,30 @@ export function menuItems(env: Environment, c = caps()) {
     ? `${paint("ok", g.ok, {}, c)} ${paint("mute", source === "stored" ? "key saved" : "key from environment", {}, c)}`
     : `${paint("focus", g.half, {}, c)} ${paint("mute", "no key yet", {}, c)}`;
   return {
-    items: [{ group: "launch" }, ...tools, { group: "manage" }, ...MANAGE],
+    items: [
+      { group: "launch" },
+      ...tools,
+      {
+        value: "resume",
+        label: "resume",
+        note: "Continue a saved session",
+        about:
+          "Pick a saved session and continue it through Concentrate on the tool's default model. Requests are billed at API rates.",
+      },
+      { group: "desktop" },
+      {
+        value: "desktop:cursor",
+        label: "cursor",
+        note: "Cursor desktop",
+        meta: "Configure / Reset",
+        about:
+          "Connect Cursor desktop to Concentrate or remove its setup. Open Cursor normally afterward. Quit Cursor before changing its configuration.",
+      },
+      { group: "manage" },
+      ...MANAGE,
+    ],
     initial: tools.find((tool) => tool.ready)?.value ?? tools[0].value,
-    status: `${keyLine}   ${paint("mute", `${ready} of ${tools.length} tools ready`, {}, c)}`,
+    status: `${keyLine}   ${paint("mute", `${ready} of ${tools.length} CLIs ready`, {}, c)}`,
   };
 }
 
@@ -112,6 +132,7 @@ export function menuItems(env: Environment, c = caps()) {
 async function back(env: Environment) {
   await select(
     {
+      fullscreen: false,
       items: [
         { value: "back", label: "Back", note: "Return to the previous menu" },
       ],
@@ -125,10 +146,12 @@ async function action(
   work: () => unknown | Promise<unknown>,
   env: Environment,
 ) {
+  clearScreen("Result");
   try {
     await work();
   } catch (error) {
-    if (!(error instanceof CnError) || error.exitCode === 130) throw error;
+    // A cancelled prompt (Esc or Ctrl+C) goes back to the menu it came from.
+    if (error instanceof CnError && error.exitCode === 130) return;
     console.error(ledger("bad", "attention", errorMessage(error)));
   }
   console.log();
@@ -217,7 +240,11 @@ async function integrationPicker(
   }
 }
 
-async function toolSettings(target: ConfigurableToolId, env: Environment) {
+async function toolSettings(
+  target: ConfigurableToolId,
+  env: Environment,
+  backNote = "Return to Settings",
+) {
   const tool = configurableTool(target);
   let initial = target === "cursor" ? "configure" : "model";
   for (;;) {
@@ -250,7 +277,7 @@ async function toolSettings(target: ConfigurableToolId, env: Environment) {
               ? "Remove this tool’s Concentrate setup"
               : "No Concentrate setup added by cn",
           },
-          { value: "back", label: "Back", note: "Return to Settings" },
+          { value: "back", label: "Back", note: backNote },
         ],
         detail: (item) => [
           target === "cursor"
@@ -325,12 +352,12 @@ export async function runSettings(env: Environment = process.env) {
 }
 
 async function doctor(env: Environment) {
-  await runDoctor({}, env);
   let initial = "back";
   for (;;) {
     const choice = await select(
       {
         title: "Doctor",
+        status: menuItems(env).status,
         initial,
         items: [
           { value: "back", label: "Back", note: "Return to home" },
@@ -340,10 +367,15 @@ async function doctor(env: Environment) {
             note: "Check local tools and key status",
           },
           { group: "live route checks" },
-          ...listConfigurableTools().map((tool) => ({
+          ...listHarnesses().map((tool) => ({
             value: tool.id,
             label: tool.label,
-            note: "Check key, catalog, and model route",
+            note: which(tool.binary, env.PATH) || "Not installed",
+            right: toolStatus(
+              Boolean(which(tool.binary, env.PATH)),
+              Boolean(resolveKey(env).key),
+              caps(env),
+            ),
           })),
         ],
         detail: (item) => [
@@ -372,17 +404,74 @@ async function doctor(env: Environment) {
   }
 }
 
+const RESUME_ARGS: Record<HarnessId, string[]> = {
+  claude: ["--resume"],
+  codex: ["resume"],
+  opencode: ["--cn-resume"],
+  pi: ["--resume"],
+};
+
+async function resumePicker(
+  env: Environment,
+  screen: ReturnType<typeof openScreen>,
+) {
+  const choice = await select(
+    {
+      title: "Resume a session",
+      items: [
+        ...listHarnesses().map((tool) => ({
+          value: tool.id,
+          label: tool.id,
+          note: which(tool.binary, env.PATH)
+            ? `Continue a saved ${tool.label} session`
+            : "Not installed",
+        })),
+        { value: "back", label: "Back", note: "Return to home" },
+      ],
+    },
+    env,
+  );
+  if (choice.cancel || choice.value === "back") return;
+  const target = choice.value as HarnessId;
+  if (!which(getHarness(target).binary, env.PATH)) return;
+  screen.suspend();
+  let code;
+  try {
+    code = await launch(target, { forwarded: RESUME_ARGS[target] }, env);
+  } finally {
+    screen.resume();
+  }
+  if (code)
+    await action(
+      () => console.log(ledger("warn", "tool exited", `Exit code ${code}`)),
+      env,
+    );
+}
+
 export async function runLauncher(env: Environment = process.env) {
+  const screen = openScreen();
+  try {
+    return await launcher(env, screen);
+  } catch (error) {
+    if (error instanceof CnError && error.exitCode === 130) return 130;
+    throw error;
+  } finally {
+    screen.close();
+  }
+}
+
+async function launcher(
+  env: Environment,
+  screen: ReturnType<typeof openScreen>,
+) {
   const c = caps(env);
-  await focusIn(c);
   let initial: string | undefined;
   for (;;) {
     const menu = menuItems(env, c);
-    console.log(
-      header(version(), { status: menu.status }, c).join("\n") + "\n",
-    );
     const choice = await select(
       {
+        title: "Workspace / Home",
+        status: menu.status,
         items: menu.items,
         initial: initial ?? menu.initial,
         rows: 14,
@@ -402,16 +491,30 @@ export async function runLauncher(env: Environment = process.env) {
         const target = choice.value.slice(5) as HarnessId;
         if (needsSetup(env) && which(getHarness(target).binary, env.PATH))
           await runSetup({ showHeader: false }, env);
-        const code = await launch(target, {}, env);
+        screen.suspend();
+        let code;
+        try {
+          code = await launch(target, {}, env);
+        } finally {
+          screen.resume();
+        }
         if (code)
-          console.log(ledger("warn", "tool exited", `Exit code ${code}`));
-      } else if (choice.value === "configure" || choice.value === "reset")
+          await action(
+            () =>
+              console.log(ledger("warn", "tool exited", `Exit code ${code}`)),
+            env,
+          );
+      } else if (choice.value === "resume") await resumePicker(env, screen);
+      else if (choice.value === "desktop:cursor")
+        await toolSettings("cursor", env, "Return to home");
+      else if (choice.value === "configure" || choice.value === "reset")
         await integrationPicker(choice.value, env);
       else if (choice.value === "settings") await runSettings(env);
       else if (choice.value === "models") await browseModels(env);
       else await doctor(env);
     } catch (error) {
-      if (!(error instanceof CnError) || error.exitCode === 130) throw error;
+      if (error instanceof CnError && error.exitCode === 130) continue;
+      clearScreen("Unable to continue");
       console.error(ledger("bad", "attention", errorMessage(error)));
       await back(env);
     }

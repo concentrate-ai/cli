@@ -79,7 +79,14 @@ const adapter: Harness = {
       positiveTokens(catalogModel?.context) !== null
         ? String(catalogModel?.context)
         : undefined);
+    // Claude models are sent as Claude Code expects. Other models cannot return
+    // the server-side auto mode checks, so skip them and the notice about them.
+    const autoModeServer =
+      env.CLAUDE_CODE_AUTO_MODE_SERVER ??
+      (/claude-/i.test(model) ? undefined : "0");
     const settings = claudeSettings(API_ROOT, model, available);
+    if (autoModeServer !== undefined)
+      settings.env.CLAUDE_CODE_AUTO_MODE_SERVER = autoModeServer;
     // The fresh session plugin takes precedence over any saved catalog/plugin.
     settings.enabledPlugins = { "cn-context@concentrate-cn": false };
     if (classifierModel)
@@ -106,6 +113,9 @@ const adapter: Harness = {
         ANTHROPIC_BASE_URL: API_ROOT,
         ANTHROPIC_MODEL: model,
         [CLAUDE_KEY_VAR]: key,
+        ...(autoModeServer !== undefined
+          ? { CLAUDE_CODE_AUTO_MODE_SERVER: autoModeServer }
+          : {}),
         ...(classifierModel
           ? { CLAUDE_CODE_AUTO_MODE_MODEL: classifierModel }
           : {}),

@@ -193,7 +193,14 @@ function locked<T>(env: Environment, work: () => T) {
 }
 export function cursorConfigured(env: Environment = process.env) {
   if (!fs.existsSync(cursorDatabase(env))) return false;
-  return receipt(readRows(env))?.active === true;
+  // An unreadable database (no sqlite3, a symlinked path) must not block logout,
+  // key rotation or global Reset for people who never configured Cursor.
+  try {
+    return receipt(readRows(env))?.active === true;
+  } catch (error) {
+    if (error instanceof CnError) return false;
+    throw error;
+  }
 }
 export function configureCursor(
   apiRoot: string,

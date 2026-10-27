@@ -1,35 +1,14 @@
 import { openCodeHeaders } from "../app-headers.js";
 import type { Harness } from "../types.js";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { CnError } from "../errors.js";
+import { optionValue } from "../sessions.js";
 
 import { API_ROOT } from "../catalog.js";
 import { opencodeConfig } from "../pickers.js";
 
-// v2 talks to a shared background service unless told to run privately, and
-// that service would ignore our config. v1 has no such flag and rejects it.
-// Help text is the direct signal; the major version backs it up in case help changes.
-export function supportsStandalone(executable: string) {
-  const help = spawnSync(executable, ["--help"], {
-    encoding: "utf8",
-    timeout: 10000,
-  });
-  if (/--standalone/.test(`${help.stdout ?? ""}${help.stderr ?? ""}`))
-    return true;
-  const out = spawnSync(executable, ["--version"], {
-    encoding: "utf8",
-    timeout: 10000,
-  });
-  const major = Number(/(\d+)\.\d+/.exec(out.stdout ?? "")?.[1]);
-  return major >= 2;
-}
-
-// The flag goes after a subcommand ("run --standalone ..."), or first for the interactive screen.
-export function withStandalone(forwarded: string[]) {
-  if (forwarded.length && !forwarded[0].startsWith("-")) {
-    return [forwarded[0], "--standalone", ...forwarded.slice(1)];
-  }
-  return ["--standalone", ...forwarded];
-}
+import { supportsStandalone, withStandalone } from "./opencode-cli.js";
+export { supportsStandalone, withStandalone } from "./opencode-cli.js";
 
 const adapter: Harness = {
   id: "opencode",
@@ -54,8 +33,52 @@ const adapter: Harness = {
         headers: openCodeHeaders(env, modern),
       }),
     );
+    const session = optionValue(forwarded, "--session", "-s");
+    if (session && modern) {
+      // v2's full-screen CLI has no --model flag. Its durable session model
+      // wins over config.model, so use the supported model-switch API first.
+      try {
+        execFileSync(
+          executable,
+          [
+            "api",
+            "--standalone",
+            "POST",
+            `/api/session/${encodeURIComponent(session)}/model`,
+            "--data",
+            JSON.stringify({ model: { providerID: "concentrate", id: model } }),
+          ],
+          {
+            env: {
+              ...env,
+              OPENCODE_CONFIG_CONTENT: config,
+              CONCENTRATE_API_KEY: key,
+            },
+            stdio: ["ignore", "pipe", "pipe"],
+            timeout: 20000,
+          },
+        );
+      } catch (error) {
+        // `--session` also creates a named session in v2, so a missing one is
+        // not an error: there is no saved model to switch.
+        const output = [error]
+          .flatMap((value) => {
+            const { stdout, stderr } = value as Record<string, unknown>;
+            return [stdout, stderr].map(String);
+          })
+          .join("\n");
+        if (!/\b404\b|not found/i.test(output))
+          throw new CnError(
+            "Could not switch the saved OpenCode session to Concentrate. Its history is intact. Check the session ID and your OpenCode version, then try again.",
+          );
+      }
+    }
+    const args =
+      session && !modern && !optionValue(forwarded, "--model", "-m")
+        ? ["--model", `concentrate/${model}`, ...forwarded]
+        : forwarded;
     return {
-      args: modern ? withStandalone(forwarded) : forwarded,
+      args: modern ? withStandalone(args) : args,
       env: { OPENCODE_CONFIG_CONTENT: config, CONCENTRATE_API_KEY: key },
       cleanup() {},
     };

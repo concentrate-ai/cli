@@ -355,29 +355,36 @@ export function resetTool(
 
 export function refreshConfiguredKey(env: Environment = process.env) {
   const saved = readStoredKey(env);
+  // Each integration is refreshed even when another one fails.
+  const problems: CnError[] = [];
   if (saved && cursorConfigured(env)) {
     try {
       refreshCursorKey(saved, env);
     } catch {
-      throw new CnError(
-        "Your cn API key was saved, but Cursor's key could not be refreshed. Quit Cursor and run cn configure cursor; if it reports edited settings, Reset Cursor first.",
+      problems.push(
+        new CnError(
+          "Your cn API key was saved, but Cursor's key could not be refreshed. Quit Cursor and run cn configure cursor; if it reports edited settings, Reset Cursor first.",
+        ),
       );
     }
   }
-  if (!toolConfigured("opencode", env)) return;
-  const key = readStoredKey(env);
-  if (!key) return;
-  const files = toolConfigPaths("opencode", env);
-  const refreshed = withSetupLock(toolSetupDir("opencode", env), () =>
-    refreshNativeCredential(
-      receiptFile("opencode", env),
-      Object.values(files),
-      files.catalog,
-      key,
-    ),
-  );
-  if (!refreshed)
-    throw new CnError(
-      "The key was saved, but OpenCode's credential was edited externally. Run cn configure opencode to review its integration.",
+  if (saved && toolConfigured("opencode", env)) {
+    const files = toolConfigPaths("opencode", env);
+    const refreshed = withSetupLock(toolSetupDir("opencode", env), () =>
+      refreshNativeCredential(
+        receiptFile("opencode", env),
+        Object.values(files),
+        files.catalog,
+        saved,
+      ),
     );
+    if (!refreshed)
+      problems.push(
+        new CnError(
+          "The key was saved, but OpenCode's credential was edited externally. Run cn configure opencode to review its integration.",
+        ),
+      );
+  }
+  if (problems.length)
+    throw new CnError(problems.map((problem) => problem.message).join("\n"));
 }

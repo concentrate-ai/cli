@@ -3,7 +3,7 @@
 #   From a checkout:   ./install.sh
 #   From the web:      curl -fsSL https://concentrate.ai/cli/install.sh | bash
 # Piped from the web, downloads a built, checksummed CLI release.
-# Set CN_INSTALL_VERSION=0.1.0 to pin a release; the default is latest.
+# Set CN_INSTALL_VERSION=0.1.1 to pin a release; the default is latest.
 set -euo pipefail
 
 MIN_NODE_MAJOR=18
@@ -65,9 +65,10 @@ ensure_node() {
   else
     echo "Node.js ${MIN_NODE_MAJOR}.${MIN_NODE_MINOR}+ is required." >&2
   fi
-  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1 && [[ -r /dev/tty ]]; then
-    local answer
-    read -r -p "Install Node.js with Homebrew now? [y/N] " answer </dev/tty
+  # /dev/tty is always readable as a file; opening it fails when there is no terminal (ssh, CI).
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v brew >/dev/null 2>&1 && { : </dev/tty; } 2>/dev/null; then
+    local answer=""
+    read -r -p "Install Node.js with Homebrew now? [y/N] " answer </dev/tty || answer=""
     if [[ "$answer" =~ ^[Yy]$ ]]; then
       brew install node
       node_ok && return 0
@@ -97,7 +98,7 @@ locate_package() {
   if [[ "$RELEASE_VERSION" != latest ]]; then
     local tag="${RELEASE_VERSION#v}"
     if [[ ! "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
-      echo "CN_INSTALL_VERSION must be a release version such as 0.1.0." >&2
+      echo "CN_INSTALL_VERSION must be a release version such as 0.1.1." >&2
       exit 1
     fi
     release_path="v$tag"
@@ -110,29 +111,35 @@ locate_package() {
   local checksums="$download_dir/SHA256SUMS"
   local release_url="$DOWNLOAD_ROOT/$release_path"
   echo "Downloading Concentrate AI CLI ($RELEASE_VERSION)..."
-  if ! curl -fsSL --proto '=https' --retry 2 --connect-timeout 10 --max-time 120 "$release_url/concentrate-cli.tar.gz" -o "$archive" ||
-     ! curl -fsSL --proto '=https' --retry 2 --connect-timeout 10 --max-time 30 "$release_url/SHA256SUMS" -o "$checksums"; then
-    echo "Could not download the CLI release. The selected CLI release may not have been published yet." >&2
-    exit 1
-  fi
-  local expected actual
-  expected="$(awk '$2 == "concentrate-cli.tar.gz" { print $1 }' "$checksums")"
-  if [[ ! "$expected" =~ ^[a-fA-F0-9]{64}$ ]]; then
-    echo "The release checksum file is missing a valid CLI checksum." >&2
-    exit 1
-  fi
-  if command -v shasum >/dev/null 2>&1; then
-    actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
-  elif command -v sha256sum >/dev/null 2>&1; then
-    actual="$(sha256sum "$archive" | awk '{print $1}')"
-  else
-    echo "Install shasum or sha256sum to verify the release." >&2
-    exit 1
-  fi
-  if [[ "$actual" != "$expected" ]]; then
-    echo "The CLI download failed SHA-256 verification. Your current installation was left unchanged." >&2
-    exit 1
-  fi
+  local expected actual attempt
+  for attempt in 1 2; do
+    # Checksum first: if a release rolls out between the two requests, the
+    # mismatch is caught below and the pair is fetched again.
+    if ! curl -fsSL --proto '=https' --retry 2 --connect-timeout 10 --max-time 30 "$release_url/SHA256SUMS" -o "$checksums" ||
+       ! curl -fsSL --proto '=https' --retry 2 --connect-timeout 10 --max-time 120 "$release_url/concentrate-cli.tar.gz" -o "$archive"; then
+      echo "Could not download the CLI release. The selected CLI release may not have been published yet." >&2
+      exit 1
+    fi
+    expected="$(awk '$2 == "concentrate-cli.tar.gz" { print $1 }' "$checksums")"
+    if [[ ! "$expected" =~ ^[a-fA-F0-9]{64}$ ]]; then
+      echo "The release checksum file is missing a valid CLI checksum." >&2
+      exit 1
+    fi
+    if command -v shasum >/dev/null 2>&1; then
+      actual="$(shasum -a 256 "$archive" | awk '{print $1}')"
+    elif command -v sha256sum >/dev/null 2>&1; then
+      actual="$(sha256sum "$archive" | awk '{print $1}')"
+    else
+      echo "Install shasum or sha256sum to verify the release." >&2
+      exit 1
+    fi
+    [[ "$actual" == "$expected" ]] && break
+    if [[ "$attempt" == 2 ]]; then
+      echo "The CLI download failed SHA-256 verification. Your current installation was left unchanged." >&2
+      exit 1
+    fi
+    sleep 3
+  done
   tar -xzf "$archive" -C "$download_dir"
   if [[ ! -f "$download_dir/dist/bin/cn.js" || -f "$download_dir/src/bin/cn.ts" ]]; then
     echo "The release does not contain the built CLI." >&2
@@ -150,7 +157,8 @@ if [[ -f "$package_dir/src/bin/cn.ts" ]]; then
   command -v npm >/dev/null 2>&1 || { echo "npm is required to build this source checkout." >&2; exit 1; }
   (
     cd "$package_dir"
-    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser ]]; then
+    # Reinstall when a tool is missing or the lockfile moved on (a new dependency such as ws).
+    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser || ! -d node_modules/ws || ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
       npm ci --include=dev --ignore-scripts
     fi
     npm run build
@@ -209,7 +217,14 @@ case ":$PATH:" in
   *)
     case "${SHELL:-}" in
       */zsh) rc_file="$HOME/.zshrc" ;;
-      */bash) rc_file="$HOME/.bashrc" ;;
+      */bash)
+        # macOS terminals start login shells, which read .bash_profile, not .bashrc.
+        if [[ "$(uname -s)" == "Darwin" || -f "$HOME/.bash_profile" ]]; then
+          rc_file="$HOME/.bash_profile"
+        else
+          rc_file="$HOME/.bashrc"
+        fi
+        ;;
       *) rc_file="your shell startup file" ;;
     esac
     printf 'Add this line to %s:\n  export PATH="$HOME/.local/bin:$PATH"\n' "$rc_file"

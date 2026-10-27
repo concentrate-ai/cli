@@ -31,6 +31,8 @@ Usage:
       tools: ${listHarnesses()
         .map((h) => h.id)
         .join(", ")}
+  cn <tool> resume [<session-id>]            Resume a saved local conversation
+  cn <tool> continue                         Continue the latest project conversation
   cn setup [--no-verify] [--models]           Save your API key (--models also picks defaults)
   cn configure <tool>                       Connect a coding tool to Concentrate
   cn reset <tool>                           Remove Concentrate setup from a coding tool
@@ -67,6 +69,36 @@ export function parseLaunchArgs(rest: string[]) {
     }
   }
   return { model, forwarded: [] };
+}
+
+export function parseHarnessLaunchArgs(target: HarnessId, rest: string[]) {
+  const options = parseLaunchArgs(rest);
+  // Explicit -- keeps every following argument in the tool's own syntax,
+  // including a literal prompt such as "resume" or "continue".
+  const separator = rest.indexOf("--");
+  const forwardedStart = rest.length - options.forwarded.length;
+  if (separator !== -1 && separator < forwardedStart) return options;
+  const [command, ...forwarded] = options.forwarded;
+  if (command !== "resume" && command !== "continue") return options;
+  if (target === "claude")
+    return { ...options, forwarded: [`--${command}`, ...forwarded] };
+  if (target === "codex")
+    return {
+      ...options,
+      forwarded:
+        command === "continue"
+          ? ["resume", "--last", ...forwarded]
+          : options.forwarded,
+    };
+  if (command === "continue")
+    return { ...options, forwarded: ["--continue", ...forwarded] };
+  const [id, ...restArgs] = forwarded;
+  if (id && !id.startsWith("-"))
+    return { ...options, forwarded: ["--session", id, ...restArgs] };
+  return {
+    ...options,
+    forwarded: [target === "pi" ? "--resume" : "--cn-resume", ...forwarded],
+  };
 }
 
 export function parseFlags(
@@ -146,7 +178,7 @@ async function dispatch(argv: string[], env: Environment) {
       await runSetup({}, env);
       console.log();
     }
-    return launch(command, parseLaunchArgs(rest), env);
+    return launch(command, parseHarnessLaunchArgs(command, rest), env);
   }
 
   switch (command) {
@@ -257,7 +289,7 @@ export async function main(
     return await dispatch(argv, env);
   } catch (error) {
     if (error instanceof CnError) {
-      console.error(errorMessage(error));
+      if (error.exitCode !== 130) console.error(errorMessage(error));
       return error.exitCode;
     }
     console.error(`cn: unexpected error: ${errorMessage(error)}`);

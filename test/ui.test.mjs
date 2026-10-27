@@ -11,8 +11,44 @@ import {
   parseKeys,
   reduce,
   renderSelect,
+  renderWorkspace,
   visible,
 } from "../dist/lib/ui/widgets.js";
+
+test("fullscreen menus fit resized terminals and keep the focused action visible", () => {
+  const items = Array.from({ length: 60 }, (_, i) => ({
+    value: `item-${i}`,
+    label: `action-${i}`,
+    note: "Tool settings",
+  }));
+  const state = createSelect(items, { initial: "item-42", filterable: true });
+  for (const [width, height] of [
+    [39, 12],
+    [69, 23],
+    [99, 39],
+    [159, 49],
+  ]) {
+    for (const color of [0, 24]) {
+      const frame = renderWorkspace(
+        state,
+        {
+          title: "Settings",
+          detail: () => [
+            "Configure this tool to use Concentrate for direct launches.",
+          ],
+        },
+        { tty: true, color, unicode: true, width, motion: false },
+        height,
+      );
+      assert.equal(frame.length, height);
+      assert.ok(frame.every((line) => visibleWidth(line) <= width));
+      const text = strip(frame.join("\n"));
+      assert.match(text, /action-42/);
+      assert.match(text, /Concentrate/);
+      assert.match(text, /back/);
+    }
+  }
+});
 
 const TTY = { isTTY: true, columns: 100 };
 const PIPE = { isTTY: false };
@@ -295,4 +331,22 @@ test("the layout width stays one column inside the terminal", () => {
   for (const line of renderSelect(state, {}, narrow))
     assert.ok(visibleWidth(line) <= 39, line);
   assert.match(renderSelect(state, {}, narrow).join("\n"), /ready/);
+});
+
+test("a screen stops reacting to signals while a child tool owns the terminal", async () => {
+  const { openScreen, fullScreenActive } =
+    await import("../dist/lib/ui/screen.js");
+  const out = { write() {} };
+  const count = () => process.listenerCount("SIGINT");
+  const before = count();
+  const screen = openScreen(out);
+  assert.equal(count(), before + 1);
+  screen.suspend();
+  assert.equal(count(), before, "Ctrl+C meant for the tool reached the menu");
+  screen.resume();
+  assert.equal(count(), before + 1);
+  assert.equal(fullScreenActive(), true);
+  screen.close();
+  assert.equal(count(), before);
+  assert.equal(fullScreenActive(), false);
 });

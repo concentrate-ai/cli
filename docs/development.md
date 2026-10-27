@@ -16,7 +16,6 @@ Claude's portable mod uses `.mts` source, which compiles to `.mjs` because the g
 
 The installer builds source checkouts before replacing an installation. Built release packages need only `dist/`, `package.json`, and `install.sh`; they do not need npm or a compiler. `dist/` is generated and ignored by Git.
 
-
 To check Claude Code integration against an installed client:
 
 ```sh
@@ -47,7 +46,7 @@ The installer approach and per-tool adapter layout were inspired by
 
 ## Native configuration and reset
 
-`tool-config.ts` builds native settings from the same model catalog and adapter helpers as session launches. `native-config-store.ts` owns private restore receipts, atomic file replacement, setup locks, and restoration that preserves later edits. JSONC edits preserve comments. TOML is parsed and serialized, so formatting is normalized while configured; an untouched Reset restores the original bytes, including comments.
+`tool-config.ts` builds native settings from the same model catalog and adapter helpers as session launches. `native-config-store.ts` owns private restore receipts, atomic file replacement, setup locks, and restoration that preserves later edits. JSONC edits preserve comments. TOML is edited in place so comments and layout survive Configure and an edited-file Reset; a file with an unusual structure falls back to being rewritten from its parsed values, which normalizes formatting. An untouched Reset restores the original bytes.
 
 `test/tool-config.test.mjs` covers all four tools, repeat setup/reset, credential helpers and rotation, JSONC, malformed files, and preservation of user edits. `test/fixtures/navigation.py` drives the real terminal UI in an isolated home. No tests use the user’s settings or real credentials.
 
