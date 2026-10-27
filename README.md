@@ -10,7 +10,7 @@ and the coding tools you want to use installed on your `PATH`.
 ## Install
 
 ```sh
-curl -fsSL https://concentrate.ai/cli/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
 cn
 ```
 
@@ -22,12 +22,21 @@ Rerun the same command to update.
 To install a particular release:
 
 ```sh
-curl -fsSL https://concentrate.ai/cli/install.sh | CN_INSTALL_VERSION=0.1.1 bash
+curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | CN_INSTALL_VERSION=0.1.1 bash
 ```
 
 If `~/.local/bin` is not on your `PATH`, the installer prints the line to add to
-your shell profile. For a source checkout, run `npm ci` and `./install.sh` instead.
-Source installs require npm to compile the TypeScript code.
+your shell profile.
+
+To install from source instead, clone this repository (npm is needed to compile
+the TypeScript code):
+
+```sh
+git clone https://github.com/concentrate-ai/cli.git
+cd cli
+npm ci
+./install.sh
+```
 
 `cn` opens a full-screen workspace for launching tools, Configure, Reset, Settings,
 Models, and Doctor. Quitting restores your shell without leaving menus in its
@@ -182,4 +191,4 @@ See [development](docs/development.md) for testing and compatibility probes.
 
 ## License
 
-[Apache License 2.0](LICENSE)
+[MIT License](LICENSE)
