@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { parseHarnessLaunchArgs } from "../dist/lib/cli.js";
-import { localSessions, resolveSessionArgs } from "../dist/lib/sessions.js";
+import { codexSessions, resolveSessionArgs } from "../dist/lib/sessions.js";
 import { getHarness } from "../dist/lib/harnesses/registry.js";
 import { runCn, tempDir } from "./helpers.mjs";
 
@@ -65,7 +65,7 @@ test("resume and continue have consistent aliases for every CLI; -- preserves na
   const expected = {
     claude: [["--resume", "id"], ["--resume"], ["--continue"]],
     codex: [["resume", "id"], ["resume"], ["resume", "--last"]],
-    opencode: [["--session", "id"], ["--cn-resume"], ["--continue"]],
+    opencode: [["--session", "id"], null, ["--continue"]],
     pi: [["--session", "id"], ["--resume"], ["--continue"]],
   };
   for (const [target, cases] of Object.entries(expected)) {
@@ -74,10 +74,13 @@ test("resume and continue have consistent aliases for every CLI; -- preserves na
       ["resume"],
       ["continue"],
     ].entries())
-      assert.deepEqual(
-        parseHarnessLaunchArgs(target, args).forwarded,
-        cases[index],
-      );
+      if (cases[index] === null)
+        assert.throws(() => parseHarnessLaunchArgs(target, args), /--session/);
+      else
+        assert.deepEqual(
+          parseHarnessLaunchArgs(target, args).forwarded,
+          cases[index],
+        );
     assert.deepEqual(
       parseHarnessLaunchArgs(target, ["--", "continue"]).forwarded,
       ["continue"],
@@ -101,7 +104,7 @@ test("Codex discovery includes subscription/provider sessions and restricts cont
   );
   fs.symlinkSync(original, path.join(path.dirname(original), "link.jsonl"));
   assert.deepEqual(
-    localSessions("codex", env).map((s) => s.id),
+    codexSessions(env).map((s) => s.id),
     ["subscription", "concentrate"],
   );
   const before = fs.readFileSync(original, "utf8");
@@ -130,16 +133,12 @@ test("Codex discovery includes subscription/provider sessions and restricts cont
   assert.equal(fs.readFileSync(original, "utf8"), before);
 });
 
-test("resume never silently creates a new conversation when no local sessions exist", async () => {
+test("Codex resume fails when there are no local sessions", async () => {
   const { env } = rig();
-  for (const [target, args] of [
-    ["codex", ["resume", "--last"]],
-    ["pi", ["--continue"]],
-  ])
-    await assert.rejects(
-      resolveSessionArgs(target, "unused", args, env),
-      /No saved/,
-    );
+  await assert.rejects(
+    resolveSessionArgs("codex", "unused", ["resume", "--last"], env),
+    /No saved/,
+  );
   codex(env, "saved");
   await assert.rejects(
     resolveSessionArgs("codex", "unused", ["resume"], env),
@@ -147,91 +146,29 @@ test("resume never silently creates a new conversation when no local sessions ex
   );
 });
 
-test("Pi finds native and legacy cn sessions and opens the original file without rewriting it", async () => {
+test("Pi handles resume and session paths itself", async () => {
   const { env } = rig();
-  pi(env, "legacy-cn", { legacy: true, age: 2000 });
-  const file = pi(env, "native-subscription", { age: 1000 });
-  pi(env, "other-project", { cwd: env.HOME });
-  const before = fs.readFileSync(file, "utf8");
-  assert.deepEqual(
-    localSessions("pi", env).map((s) => s.id),
-    ["native-subscription", "legacy-cn"],
-  );
-  const args = await resolveSessionArgs(
-    "pi",
-    "unused",
-    ["--continue", "-p", "hello"],
-    env,
-  );
-  assert.deepEqual(args, [
-    "--session",
-    file,
-    "--session-dir",
-    path.dirname(file),
-    "-p",
-    "hello",
-  ]);
-  assert.deepEqual(
-    await resolveSessionArgs("pi", "unused", ["--session", "native-sub"], env),
-    args.slice(0, 4),
-  );
-  const prepared = await getHarness("pi").prepare({
-    model: "test-model",
-    key: "sk-test",
-    available: [{ id: "test-model", name: "Test" }],
-    forwarded: args,
-    env,
-  });
-  try {
-    assert.equal(prepared.args.includes("--session-id"), false);
-    assert.equal(
-      prepared.args.filter((arg) => arg === "--session-dir").length,
-      1,
-    );
-    assert.equal(prepared.env.CONCENTRATE_API_KEY, "sk-test");
-  } finally {
-    prepared.cleanup();
-  }
-  assert.equal(fs.readFileSync(file, "utf8"), before);
+  for (const args of [
+    ["--continue"],
+    ["--resume"],
+    ["--session", "partial-id"],
+    ["--session", "/some/old/session.jsonl"],
+    ["--session-dir", "/custom", "--resume"],
+  ])
+    assert.deepEqual(await resolveSessionArgs("pi", "unused", args, env), args);
 });
 
-test("Pi respects explicit session directories and rejects ambiguous, missing and corrupt sessions", async () => {
-  const { env, root } = rig();
-  const directory = path.join(root, "custom");
-  const file = pi(env, "custom-one", { directory });
-  pi(env, "custom-two", { directory });
-  pi(env, "default");
-  assert.deepEqual(
-    localSessions("pi", env, process.cwd(), directory)
-      .map((s) => s.id)
-      .sort(),
-    ["custom-one", "custom-two"],
-  );
-  await assert.rejects(
-    resolveSessionArgs(
-      "pi",
-      "unused",
-      ["--session", "custom", "--session-dir", directory],
-      env,
-    ),
-    /ambiguous/,
-  );
-  await assert.rejects(
-    resolveSessionArgs("pi", "unused", ["--session", "missing"], env),
-    /No saved pi session matches/,
-  );
-  const args = await resolveSessionArgs(
-    "pi",
-    "unused",
-    ["--session", file],
-    env,
-  );
-  assert.equal(args[1], file);
-  fs.writeFileSync(file, "not a saved session");
-  await assert.rejects(
-    resolveSessionArgs("pi", "unused", ["--session", file], env),
-    /not a readable saved session/,
-  );
+test("OpenCode explicit native session arguments do not invoke a cn picker", async () => {
+  const { env } = rig();
+  for (const args of [
+    [],
+    ["--session", "ses_existing"],
+    ["run", "--session", "ses_existing", "hello"],
+  ])
+    assert.deepEqual(
+      await resolveSessionArgs("opencode", "nonexistent", args, env),
+      args,
+    );
 });
 
 function openCodeRig() {
@@ -344,7 +281,7 @@ test("Codex continue and the picker skip subagent and scripted sessions unless a
   );
   save(file("scripted"), meta("scripted", "exec"), 1000);
   assert.deepEqual(
-    localSessions("codex", env).map((s) => s.id),
+    codexSessions(env).map((s) => s.id),
     ["interactive"],
   );
   assert.deepEqual(
@@ -352,7 +289,7 @@ test("Codex continue and the picker skip subagent and scripted sessions unless a
     ["resume", "interactive"],
   );
   assert.deepEqual(
-    localSessions("codex", env, process.cwd(), undefined, {
+    codexSessions(env, process.cwd(), {
       includeNonInteractive: true,
     }).map((s) => s.id),
     ["subagent", "scripted", "interactive"],
@@ -380,7 +317,7 @@ test("a session whose header line is larger than 64 KiB is still found", () => {
     },
   });
   assert.deepEqual(
-    localSessions("codex", env).map((s) => s.id),
+    codexSessions(env).map((s) => s.id),
     ["big"],
   );
 });
@@ -394,7 +331,7 @@ test("codex exec resume --last continues scripted runs and never forwards the pi
     payload: { id, cwd: process.cwd(), source },
   });
   save(file("scripted"), meta("scripted", "exec"), 0);
-  save(file("subagent"), meta("subagent", { subagent: { other: "x" } }), 0);
+  save(file("subagent"), meta("subagent", { subagent: { other: "x" } }), 10000);
   for (const extra of [[], ["--include-non-interactive"]])
     assert.deepEqual(
       await resolveSessionArgs(

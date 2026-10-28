@@ -6,6 +6,8 @@ import { test } from "node:test";
 import { summarize } from "../dist/lib/catalog.js";
 import { parseConfig } from "../dist/lib/config-formats.js";
 import {
+  codexProviderPresent,
+  configureCodexProvider,
   configureTool,
   resetTool,
   toolConfigured,
@@ -19,7 +21,7 @@ import {
 } from "../dist/lib/settings.js";
 import { fakeTool, tempDir, runCn } from "./helpers.mjs";
 
-const models = ["small", "large"].map((id, index) =>
+const models = ["gpt-small", "gpt-large"].map((id, index) =>
   summarize({
     id,
     name: id,
@@ -60,7 +62,12 @@ function fixture() {
   };
   writeKey("sk-native-test", env);
   writePreferences(
-    { claude: "small", codex: "small", opencode: "small", pi: "small" },
+    {
+      claude: "gpt-small",
+      codex: "gpt-small",
+      opencode: "gpt-small",
+      pi: "gpt-small",
+    },
     env,
   );
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
@@ -125,7 +132,7 @@ for (const id of ["claude", "codex", "opencode", "pi"]) {
     let text = fs.readFileSync(files.settings, "utf8");
     text =
       id === "codex"
-        ? text.replace('model = "small"', 'model = "user-selected"') +
+        ? text.replace('model = "gpt-small"', 'model = "user-selected"') +
           "\n[custom]\nkeep = true\n"
         : JSON.stringify({
             ...JSON.parse(text),
@@ -166,8 +173,8 @@ test("Claude installs a persistent capability plugin; Pi and OpenCode keep conte
   const limits = await import(
     pathToFileURL(path.join(plugin, "hooks", "limits.mjs"))
   );
-  assert.equal(limits.limits.small, models[0].context);
-  assert.equal(limits.limits.large, models[1].context);
+  assert.equal(limits.limits["gpt-small"], models[0].context);
+  assert.equal(limits.limits["gpt-large"], models[1].context);
   const settings = JSON.parse(
     fs.readFileSync(toolConfigPaths("claude", env).settings, "utf8"),
   );
@@ -187,11 +194,11 @@ test("Claude installs a persistent capability plugin; Pi and OpenCode keep conte
     fs.readFileSync(toolConfigPaths("opencode", env).settings, "utf8"),
   );
   assert.equal(
-    oc.provider.concentrate.models.small.limit.context,
+    oc.provider.concentrate.models["gpt-small"].limit.context,
     models[0].context,
   );
   assert.equal(
-    oc.provider.concentrate.models.small.limit.output,
+    oc.provider.concentrate.models["gpt-small"].limit.output,
     models[0].output,
   );
   const authFile = toolConfigPaths("opencode", env).catalog;
@@ -270,12 +277,12 @@ test("saved-key rotation updates OpenCode’s private credential file and Logout
 test("changing a default also updates an already configured native tool", async () => {
   const env = fixture();
   await configureTool("pi", env);
-  const result = runCn(["model", "pi", "large"], { env });
+  const result = runCn(["model", "pi", "gpt-large"], { env });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     JSON.parse(fs.readFileSync(toolConfigPaths("pi", env).settings))
       .defaultModel,
-    "large",
+    "gpt-large",
   );
 });
 
@@ -324,7 +331,7 @@ for (const id of ["codex", "opencode", "pi"]) {
     );
     const headers =
       id === "codex"
-        ? doc.model_providers.cn_concentrate.http_headers
+        ? doc.model_providers.concentrate.http_headers
         : id === "opencode"
           ? doc.provider.concentrate.options.headers
           : doc.providers.concentrate.headers;
@@ -342,7 +349,7 @@ for (const id of ["codex", "opencode", "pi"]) {
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const original =
       id === "codex"
-        ? '[model_providers.cn_concentrate.http_headers]\n"x-aPP" = "my-tool"\n"X-Other" = "keep"\n'
+        ? '[model_providers.concentrate.http_headers]\n"x-aPP" = "my-tool"\n"X-Other" = "keep"\n'
         : JSON.stringify({
             [id === "opencode" ? "provider" : "providers"]: {
               concentrate: {
@@ -364,7 +371,7 @@ for (const id of ["codex", "opencode", "pi"]) {
     );
     const headers =
       id === "codex"
-        ? doc.model_providers.cn_concentrate.http_headers
+        ? doc.model_providers.concentrate.http_headers
         : id === "opencode"
           ? doc.provider.concentrate.options.headers
           : doc.providers.concentrate.headers;
@@ -374,3 +381,38 @@ for (const id of ["codex", "opencode", "pi"]) {
     assert.equal(fs.readFileSync(target, "utf8"), original);
   });
 }
+
+test("codex: adding only the provider keeps the default provider, model, and comments, and Reset restores the file", () => {
+  const env = fixture();
+  const { settings } = toolConfigPaths("codex", env);
+  const original =
+    '# my notes\nmodel = "gpt-6-sol" # keep\n\n[tui]\ntheme = "dark"\n';
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, original);
+  assert.equal(codexProviderPresent(env), false);
+
+  configureCodexProvider(env);
+  const doc = parseConfig(fs.readFileSync(settings, "utf8"), "toml");
+  assert.equal(doc.model, "gpt-6-sol");
+  assert.equal(doc.model_provider, undefined);
+  assert.equal(doc.model_catalog_json, undefined);
+  assert.equal(doc.model_providers.concentrate.wire_api, "responses");
+  assert.ok(doc.model_providers.concentrate.auth.command);
+  assert.match(fs.readFileSync(settings, "utf8"), /# my notes/);
+  assert.equal(codexProviderPresent(env), true);
+  assert.equal(toolConfigured("codex", env), true);
+
+  resetTool("codex", env);
+  assert.equal(fs.readFileSync(settings, "utf8"), original);
+  assert.equal(codexProviderPresent(env), false);
+});
+
+test("codex: the provider-only setup needs a saved key and is not offered when the config is unreadable", () => {
+  const env = fixture();
+  fs.rmSync(path.join(env.CN_CONFIG_HOME, "credentials.json"));
+  assert.throws(() => configureCodexProvider(env), /Save your key/);
+  const { settings } = toolConfigPaths("codex", env);
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, "not = [valid toml");
+  assert.equal(codexProviderPresent(env), true);
+});

@@ -338,7 +338,9 @@ export function writeCodexCatalog(
       "debug",
       "models",
     ],
-    { env, encoding: "utf8", timeout: 15000 },
+    // Validation only needs the exit status. Real catalogs can be several MB;
+    // buffering Codex's full JSON output can exceed Node's default limit.
+    { env, stdio: "ignore", timeout: 15000 },
   );
   if (probe.error || probe.status !== 0) {
     throw new CnError(

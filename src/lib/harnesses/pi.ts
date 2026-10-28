@@ -1,15 +1,12 @@
 import { appHeaders } from "../app-headers.js";
 import { record } from "../validation.js";
 import type { Harness, Environment, Model } from "../types.js";
-import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import { API_ROOT } from "../catalog.js";
 import { piConfig } from "../pickers.js";
-import { filesIn, lastModelInTranscript, regularFile } from "../recall.js";
-import { configDir } from "../settings.js";
 
 const RESOURCE_DIRS = [
   "extensions",
@@ -18,6 +15,7 @@ const RESOURCE_DIRS = [
   "prompt_templates",
   "themes",
   "packages",
+  "bin",
 ];
 
 function readObject(file: string): Record<string, unknown> {
@@ -67,57 +65,15 @@ function preparePiDir(
       fs.symlinkSync(original, path.join(directory, name), "dir");
     }
   }
-}
-
-const RESUMES = [
-  "-c",
-  "--continue",
-  "-r",
-  "--resume",
-  "--session",
-  "--session-id",
-  "--fork",
-  "--no-session",
-];
-
-const has = (forwarded: string[], flags: string[]) =>
-  forwarded.some((arg) =>
-    flags.some((flag) => arg === flag || arg.startsWith(`${flag}=`)),
+  // Pi owns its normal project sessions. The rest of this profile stays
+  // temporary, so sharing this directory preserves sessions in both commands.
+  const sessions = path.join(source, "sessions");
+  fs.mkdirSync(sessions, { recursive: true, mode: 0o700 });
+  fs.symlinkSync(
+    path.resolve(sessions),
+    path.join(directory, "sessions"),
+    "dir",
   );
-
-function optionValue(forwarded: string[], flag: string) {
-  const at = forwarded.findIndex(
-    (arg) => arg === flag || arg.startsWith(`${flag}=`),
-  );
-  if (at < 0) return null;
-  return forwarded[at] === flag
-    ? (forwarded[at + 1] ?? null)
-    : forwarded[at].slice(flag.length + 1);
-}
-
-// Pi names a transcript "<time>_<session id>.jsonl" and records each model switch in it.
-function recallPiModel({
-  sessionDir,
-  sessionId,
-}: {
-  sessionDir: string;
-  sessionId: string;
-}) {
-  const file = filesIn(sessionDir, `_${sessionId}.jsonl`).find(regularFile);
-  return file
-    ? lastModelInTranscript(file, (entry) => {
-        if (entry.type === "model_change" && entry.provider === "concentrate")
-          return entry.modelId;
-        const reply = record(entry.message);
-        if (
-          entry.type === "message" &&
-          reply?.role === "assistant" &&
-          reply.provider === "concentrate"
-        )
-          return reply.model;
-        return null;
-      })
-    : null;
 }
 
 const adapter: Harness = {
@@ -134,24 +90,9 @@ const adapter: Harness = {
       fs.rmSync(directory, { recursive: true, force: true });
     try {
       preparePiDir(directory, model, available, env);
-      const args = ["--provider", "concentrate", "--model", model];
-      let sessionDir = optionValue(forwarded, "--session-dir");
-      if (!sessionDir && !has(forwarded, ["--no-session"])) {
-        sessionDir = path.join(configDir(env), "pi-sessions");
-        fs.mkdirSync(sessionDir, { recursive: true, mode: 0o700 });
-        args.push("--session-dir", sessionDir);
-      }
-      // A pinned ID names this run's transcript. Resumed sessions keep their own.
-      const sessionId =
-        sessionDir && !has(forwarded, RESUMES) ? randomUUID() : null;
-      if (sessionId) args.push("--session-id", sessionId);
       return {
-        args: [...args, ...forwarded],
+        args: ["--provider", "concentrate", "--model", model, ...forwarded],
         env: { CONCENTRATE_API_KEY: key, PI_CODING_AGENT_DIR: directory },
-        recall: () =>
-          sessionId && sessionDir
-            ? recallPiModel({ sessionDir, sessionId })
-            : null,
         cleanup,
       };
     } catch (error) {

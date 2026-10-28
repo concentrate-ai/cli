@@ -4,7 +4,7 @@ import { isRecord, record, positiveTokens } from "./validation.js";
 import path from "node:path";
 
 import { CnError } from "./errors.js";
-import { cleanText, isModelId } from "./safe.js";
+import { cleanText, isModelId, isOpenAiModel } from "./safe.js";
 import { configDir, readJson, writeJson } from "./settings.js";
 
 export const API_ROOT = "https://api.concentrate.ai";
@@ -201,7 +201,7 @@ export async function fetchCatalog({
   const file = path.join(configDir(env), "catalog.json");
   let cached: Record<string, unknown> = {};
   try {
-    cached = readJson(file);
+    cached = readJson(file, { private: false });
   } catch {
     cached = {};
   }
@@ -247,7 +247,8 @@ export function routingModels(models: Model[]) {
 export function modelsFor(harness: HarnessId, models: Model[]) {
   models = routingModels(models);
   if (harness === "claude") return models.filter((m) => m.claude);
-  if (harness === "codex") return models.filter((m) => m.codex);
+  if (harness === "codex")
+    return models.filter((m) => m.codex && isOpenAiModel(m.id));
   return models.filter((m) => m.chat_candidate);
 }
 

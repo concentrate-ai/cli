@@ -6,6 +6,20 @@ import { BIN } from "./helpers.mjs";
 
 const python = spawnSync("python3", ["--version"]);
 test(
+  "resume tool selector lists OpenCode sessions and opens the selected session",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("./fixtures/opencode-resume-navigation.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 25000,
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  },
+);
+test(
   "resume picker finds subscription sessions and cancels without launching or leaving output",
   { skip: process.platform === "win32" || python.status !== 0 },
   () => {

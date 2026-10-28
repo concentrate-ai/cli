@@ -2,6 +2,7 @@ import { isConfigurableTool } from "./configurable-tools.js";
 import { CURSOR_NOTICE } from "./cursor-config.js";
 import type { Environment, HarnessId } from "./types.js";
 import {
+  offerCodexResume,
   runDoctor,
   runKey,
   runLogout,
@@ -24,7 +25,7 @@ import { ledger } from "./ui/layout.js";
 import { interactive } from "./ui/widgets.js";
 import { version } from "./version.js";
 
-const HELP = `cn - Concentrate AI: one key for every coding agent
+const HELP = `cn - Concentrate AI: one key for every coding agent (beta)
 
 Usage:
   cn <tool> [--model <id>] [-- <tool args>]   Launch a tool through Concentrate AI
@@ -32,6 +33,7 @@ Usage:
         .map((h) => h.id)
         .join(", ")}
   cn <tool> resume [<session-id>]            Resume a saved local conversation
+  cn opencode --session <id>                Resume an OpenCode conversation
   cn <tool> continue                         Continue the latest project conversation
   cn setup [--no-verify] [--models]           Save your API key (--models also picks defaults)
   cn configure <tool>                       Connect a coding tool to Concentrate
@@ -95,9 +97,11 @@ export function parseHarnessLaunchArgs(target: HarnessId, rest: string[]) {
   const [id, ...restArgs] = forwarded;
   if (id && !id.startsWith("-"))
     return { ...options, forwarded: ["--session", id, ...restArgs] };
+  if (target === "opencode")
+    throw usageError("OpenCode uses --session <id> or --continue to resume.");
   return {
     ...options,
-    forwarded: [target === "pi" ? "--resume" : "--cn-resume", ...forwarded],
+    forwarded: ["--resume", ...forwarded],
   };
 }
 
@@ -178,6 +182,8 @@ async function dispatch(argv: string[], env: Environment) {
       await runSetup({}, env);
       console.log();
     }
+    if (command === "codex" && which(adapter.binary, env.PATH))
+      await offerCodexResume(env);
     return launch(command, parseHarnessLaunchArgs(command, rest), env);
   }
 

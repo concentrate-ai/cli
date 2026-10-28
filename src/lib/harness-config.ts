@@ -1,6 +1,9 @@
 import type { Effort, Environment } from "./types.js";
 
 export interface ClaudeSettings {
+  hooks?: {
+    SessionEnd: { hooks: { type: "command"; command: string }[] }[];
+  };
   enabledPlugins?: Record<string, boolean>;
   apiKeyHelper: string;
   env: Environment;

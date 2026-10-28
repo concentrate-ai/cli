@@ -32,7 +32,7 @@ export interface PreparedHarness {
   env: Environment;
   unset?: readonly string[];
   recall?: () => string | null;
-  resumeHint?: string;
+  resumeHint?: () => string | null;
   cleanup: () => void;
 }
 export interface Harness {

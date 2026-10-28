@@ -38,30 +38,30 @@ const raw = (id) => ({
   },
   providers: { a: provider("a"), b: provider("b", 2000) },
 });
-const models = [summarize(raw("m1")), summarize(raw("m2"))];
+const models = [summarize(raw("gpt-m1")), summarize(raw("gpt-m2"))];
 
 test("retired routing preference is ignored and removed on the next model save", () => {
   const env = { CN_CONFIG_HOME: tempDir() };
   const file = path.join(env.CN_CONFIG_HOME, "config.json");
   writeJson(file, {
     autoProvider: false,
-    models: { ...DEFAULT_MODELS, pi: "a/m1" },
+    models: { ...DEFAULT_MODELS, pi: "a/gpt-m1" },
   });
-  assert.equal(readPreferences(env).pi, "a/m1");
-  writePreferences({ ...DEFAULT_MODELS, pi: "m2" }, env);
-  assert.equal(readPreferences(env).pi, "m2");
+  assert.equal(readPreferences(env).pi, "a/gpt-m1");
+  writePreferences({ ...DEFAULT_MODELS, pi: "gpt-m2" }, env);
+  assert.equal(readPreferences(env).pi, "gpt-m2");
   assert.equal(Object.hasOwn(readJson(file), "autoProvider"), false);
 });
 
 test("catalog exposes unique slugs for every tool and retains provider metadata internally", () => {
   assert.deepEqual(
     routingModels(models).map((m) => m.id),
-    ["m1", "m2"],
+    ["gpt-m1", "gpt-m2"],
   );
   for (const harness of Object.keys(DEFAULT_MODELS)) {
     assert.deepEqual(
       modelsFor(harness, models).map((m) => m.id),
-      ["m1", "m2"],
+      ["gpt-m1", "gpt-m2"],
     );
   }
   assert.equal(models[0].variants[1].context, 2000);
@@ -69,7 +69,7 @@ test("catalog exposes unique slugs for every tool and retains provider metadata 
   assert.equal(models[0].variants[0].reasoning, true);
   assert.deepEqual(
     routingModels([models[0], models[0]]).map((m) => m.id),
-    ["m1"],
+    ["gpt-m1"],
   );
 });
 
@@ -82,12 +82,12 @@ test("provider entries survive cache round trips and old cache is refreshed", as
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () =>
-      new Response(JSON.stringify({ data: [raw("m1")], has_more: false }));
+      new Response(JSON.stringify({ data: [raw("gpt-m1")], has_more: false }));
     assert.equal((await fetchCatalog({ env })).source, "live");
     const cached = await fetchCatalog({ env: { ...env, CN_OFFLINE: "1" } });
     assert.deepEqual(
       modelsFor("pi", cached.models).map((m) => m.id),
-      ["m1"],
+      ["gpt-m1"],
     );
   } finally {
     globalThis.fetch = original;
@@ -124,7 +124,9 @@ for (const harness of Object.keys(DEFAULT_MODELS)) {
       });
       // Saved pinned choices normalize to the slug in automatic mode.
       writePreferences(
-        Object.fromEntries(Object.keys(DEFAULT_MODELS).map((h) => [h, "a/m1"])),
+        Object.fromEntries(
+          Object.keys(DEFAULT_MODELS).map((h) => [h, "a/gpt-m1"]),
+        ),
         env,
       );
       const config = path.join(dir, "config.json");
@@ -150,9 +152,9 @@ console.log(JSON.stringify({ args, catalog }));`,
       const result = runCn([harness], { env });
       assert.equal(result.status, 0, result.stderr);
       const actual = JSON.parse(result.stdout);
-      const expected = ["m1", "m2"];
+      const expected = ["gpt-m1", "gpt-m2"];
       assert.deepEqual([...actual.catalog].sort(), [...expected].sort());
-      assert.ok(actual.args.includes("m1") || harness === "opencode");
+      assert.ok(actual.args.includes("gpt-m1") || harness === "opencode");
     });
   }
 }

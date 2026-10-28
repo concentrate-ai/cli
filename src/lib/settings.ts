@@ -6,11 +6,11 @@ import path from "node:path";
 
 import { isRecord, errorCode, errorMessage } from "./validation.js";
 import { CnError } from "./errors.js";
-import { isApiKey, isModelId } from "./safe.js";
+import { isApiKey, isModelId, isOpenAiModel } from "./safe.js";
 
 export const DEFAULT_MODELS = Object.freeze<Preferences>({
   claude: "claude-sonnet-4-6",
-  codex: "deepseek-v4-1-flash",
+  codex: "gpt-6.1-terra",
   opencode: "deepseek-v4-1-flash",
   pi: "deepseek-v4-1-flash",
 });
@@ -32,7 +32,12 @@ export function configDir(env: Environment = process.env) {
   return path.join(os.homedir(), ".config", "concentrate-cli");
 }
 
-export function readJson(file: string): Record<string, unknown> {
+// Credentials and restore receipts hold secrets and must be private. Preferences
+// and the model catalog hold none, so a loose mode must not stop cn from starting.
+export function readJson(
+  file: string,
+  { private: requirePrivate = true }: { private?: boolean } = {},
+): Record<string, unknown> {
   let stat;
   try {
     stat = fs.lstatSync(file);
@@ -42,7 +47,7 @@ export function readJson(file: string): Record<string, unknown> {
   }
   if (stat.isSymbolicLink())
     throw new CnError(`Refusing to read a symbolic link: ${file}`);
-  if (stat.mode & 0o077) {
+  if (requirePrivate && stat.mode & 0o077) {
     throw new CnError(
       `Private file is accessible to others: ${file} (run chmod 600)`,
     );
@@ -87,7 +92,9 @@ export function writeJson(file: string, value: unknown) {
 }
 
 export function readPreferences(env: Environment = process.env) {
-  const data = readJson(path.join(configDir(env), "config.json"));
+  const data = readJson(path.join(configDir(env), "config.json"), {
+    private: false,
+  });
   const configured = data.models ?? {};
   if (!isRecord(configured)) {
     throw new CnError("models must be an object in config.json");
@@ -96,14 +103,16 @@ export function readPreferences(env: Environment = process.env) {
   for (const id of HARNESS_IDS) {
     const value =
       typeof configured[id] === "string" ? configured[id].trim() : "";
-    if (isModelId(value)) models[id] = value;
+    // Codex is limited to OpenAI models; anything else falls back to the default.
+    if (isModelId(value) && (id !== "codex" || isOpenAiModel(value)))
+      models[id] = value;
   }
   return models;
 }
 
 // First run: nothing to launch with until there is a key.
 export function needsSetup(env: Environment = process.env) {
-  return !resolveKey(env).key;
+  return !resolveKeyOrNull(env).key;
 }
 
 export function writePreferences(
@@ -122,8 +131,21 @@ export function writePreferences(
     }
   }
   const file = path.join(configDir(env), "config.json");
-  const { autoProvider: _retired, ...saved } = readJson(file);
+  const { autoProvider: _retired, ...saved } = readJson(file, {
+    private: false,
+  });
   writeJson(file, { ...saved, models });
+}
+
+// For the paths that replace a key: a damaged saved key is treated as absent so
+// that cn key and cn setup can always write a good one.
+export function readStoredKeyOrNull(env: Environment = process.env) {
+  try {
+    return readStoredKey(env);
+  } catch (error) {
+    if (error instanceof CnError) return null;
+    throw error;
+  }
 }
 
 export function readStoredKey(env: Environment = process.env) {
@@ -156,6 +178,17 @@ export function resolveKey(env: Environment = process.env) {
   return { key: null, source: "missing" };
 }
 
+// Menus and first-run checks must still open when the saved key is damaged, so
+// the user can replace it from inside cn.
+export function resolveKeyOrNull(env: Environment = process.env) {
+  try {
+    return resolveKey(env);
+  } catch (error) {
+    if (error instanceof CnError) return { key: null, source: "invalid" };
+    throw error;
+  }
+}
+
 export function writeKey(value: unknown, env: Environment = process.env) {
   const key = typeof value === "string" ? value.trim() : "";
   if (!key) throw new CnError("API key cannot be empty");
@@ -181,7 +214,12 @@ export function deleteStoredKey(env: Environment = process.env) {
   return true;
 }
 
-const STATE_FILES = ["credentials.json", "config.json", "catalog.json"];
+const STATE_FILES = [
+  "credentials.json",
+  "config.json",
+  "catalog.json",
+  "codex-provider-declined",
+];
 
 // What `cn reset` would remove. Pi chat history only counts when asked for.
 export function resetTargets(

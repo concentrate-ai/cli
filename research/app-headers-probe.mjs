@@ -43,7 +43,7 @@ for (const id of ["codex", "opencode", "pi"]) {
     const file=id === "pi" ? files.catalog : files.settings;
     const original=fs.readFileSync(file,"utf8");
     restore=()=>fs.writeFileSync(file,original);
-    const parts=id === "codex" ? ["model_providers","cn_concentrate","base_url"] : id === "pi" ? ["providers","concentrate","baseUrl"] : ["providers","concentrate","settings","baseURL"];
+    const parts=id === "codex" ? ["model_providers","concentrate","base_url"] : id === "pi" ? ["providers","concentrate","baseUrl"] : ["providers","concentrate","settings","baseURL"];
     fs.writeFileSync(file,setConfig(original,id === "codex" ? "toml":"json",parts,endpoint));
     args=[];
    } else {

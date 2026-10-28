@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   appHeaders,
-  codexHeaders,
+  codexHeaderConfig,
   openCodeHeaders,
 } from "../dist/lib/app-headers.js";
 import { tempDir } from "./helpers.mjs";
@@ -27,12 +27,12 @@ test("Codex respects CLI overrides and environment-supplied X-App", () => {
     path.join(dir, "config.toml"),
     '[model_providers.concentrate.env_http_headers]\n"x-app"="APP_NAME"\n',
   );
-  assert.deepEqual(codexHeaders("concentrate", env), {});
+  assert.deepEqual(codexHeaderConfig("concentrate", env).http_headers, {});
   assert.deepEqual(
-    codexHeaders("concentrate", env, [
+    codexHeaderConfig("concentrate", env, [
       "-c",
       'model_providers.concentrate.http_headers={"x-aPP"="explicit"}',
-    ]),
+    ]).http_headers,
     { "x-aPP": "explicit" },
   );
 });

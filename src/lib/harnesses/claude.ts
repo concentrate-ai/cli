@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { prepareClaudeContext } from "../claude-context.js";
+import { prepareClaudeProfile } from "../claude-profile.js";
+import { repairClaudeSessions } from "../claude-session-repair.js";
 import { API_ROOT } from "../catalog.js";
 import { CLAUDE_BLANKED, CLAUDE_KEY_VAR, claudeSettings } from "../pickers.js";
 import { filesIn, lastModelInTranscript, regularFile } from "../recall.js";
@@ -84,7 +86,11 @@ const adapter: Harness = {
     const autoModeServer =
       env.CLAUDE_CODE_AUTO_MODE_SERVER ??
       (/claude-/i.test(model) ? undefined : "0");
+    // claude.ai connectors belong to a subscription login, which this session
+    // does not use. Without this, Claude Code warns that they are disabled.
+    const claudeAiConnectors = env.ENABLE_CLAUDEAI_MCP_SERVERS ?? "false";
     const settings = claudeSettings(API_ROOT, model, available);
+    settings.env.ENABLE_CLAUDEAI_MCP_SERVERS = claudeAiConnectors;
     if (autoModeServer !== undefined)
       settings.env.CLAUDE_CODE_AUTO_MODE_SERVER = autoModeServer;
     // The fresh session plugin takes precedence over any saved catalog/plugin.
@@ -99,6 +105,17 @@ const adapter: Harness = {
       forwarded,
       env,
     });
+    let profile;
+    try {
+      profile = prepareClaudeProfile(env);
+    } catch (error) {
+      context?.cleanup();
+      profile?.cleanup();
+      throw error;
+    }
+    settings.hooks = {
+      SessionEnd: [{ hooks: [{ type: "command", command: profile.endHook }] }],
+    };
     return {
       args: [
         "--settings",
@@ -112,7 +129,9 @@ const adapter: Harness = {
       env: {
         ANTHROPIC_BASE_URL: API_ROOT,
         ANTHROPIC_MODEL: model,
+        CLAUDE_CONFIG_DIR: profile.directory,
         [CLAUDE_KEY_VAR]: key,
+        ENABLE_CLAUDEAI_MCP_SERVERS: claudeAiConnectors,
         ...(autoModeServer !== undefined
           ? { CLAUDE_CODE_AUTO_MODE_SERVER: autoModeServer }
           : {}),
@@ -123,12 +142,27 @@ const adapter: Harness = {
           ? { CLAUDE_CODE_MAX_CONTEXT_TOKENS: contextTokens }
           : {}),
       },
-      // Also dropped from the inherited environment, so nothing the shell exports
-      // reaches Concentrate or routes around it.
+      // Drop inherited credentials and routing switches.
       unset: CLAUDE_BLANKED,
       recall: () => (sessionId ? recallClaudeModel({ env, sessionId }) : null),
       cleanup() {
         context?.cleanup();
+        try {
+          const count = repairClaudeSessions({
+            env,
+            profile: profile.directory,
+          });
+          if (count < 0 && process.stdin.isTTY && process.stdout.isTTY)
+            console.error(
+              "cn: Claude did not report the session on exit; diagnostic cleanup was skipped.",
+            );
+        } catch {
+          console.error(
+            "cn: Claude session diagnostic cleanup could not be completed.",
+          );
+        } finally {
+          profile.cleanup();
+        }
       },
     };
   },

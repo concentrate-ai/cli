@@ -4,7 +4,6 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import type { Environment, HarnessId } from "./types.js";
 import { CnError } from "./errors.js";
-import { configDir } from "./settings.js";
 import { isRecord, record } from "./validation.js";
 import { interactive, select } from "./ui/widgets.js";
 import { supportsStandalone } from "./harnesses/opencode-cli.js";
@@ -95,93 +94,52 @@ export function hasOption(args: string[], ...names: string[]) {
   );
 }
 
-export function localSessions(
-  target: "codex" | "pi",
+export function codexSessions(
   env: Environment,
   cwd = process.cwd(),
-  directory?: string,
   {
     includeNonInteractive = false,
     includeScripted = false,
   }: { includeNonInteractive?: boolean; includeScripted?: boolean } = {},
 ) {
-  let roots: string[];
-  if (target === "codex")
-    roots = [
-      path.join(env.CODEX_HOME || path.join(home(env), ".codex"), "sessions"),
-    ];
-  else {
-    const agent =
-      env.PI_CODING_AGENT_DIR || path.join(home(env), ".pi", "agent");
-    let configured: unknown;
-    for (const settings of [
-      path.join(agent, "settings.json"),
-      path.join(cwd || process.cwd(), ".pi", "settings.json"),
-    ]) {
-      try {
-        const value = record(
-          JSON.parse(fs.readFileSync(settings, "utf8")),
-        ).sessionDir;
-        if (typeof value === "string") configured = value;
-      } catch {
-        /* Default directories remain available. */
-      }
-    }
-    const override =
-      directory ||
-      env.PI_CODING_AGENT_SESSION_DIR ||
-      (typeof configured === "string" ? configured : undefined);
-    roots = override
-      ? [
-          path.resolve(override.replace(/^~(?=\/)/, home(env))),
-          ...(directory ? [] : [path.join(configDir(env), "pi-sessions")]),
-        ]
-      : [
-          path.join(agent, "sessions"),
-          path.join(configDir(env), "pi-sessions"),
-        ];
-  }
-  const sessionFiles = new Set(
-    roots.flatMap((root) =>
-      files(path.resolve(root), target === "codex" ? 3 : 1),
-    ),
+  const root = path.join(
+    env.CODEX_HOME || path.join(home(env), ".codex"),
+    "sessions",
   );
-  const sessions = [...sessionFiles].flatMap((file): SavedSession[] => {
-    const entry = header(file);
-    const meta =
-      target === "codex" && entry?.type === "session_meta"
-        ? record(entry.payload)
-        : target === "pi" && entry?.type === "session"
-          ? entry
-          : null;
-    if (!meta || typeof meta.id !== "string" || typeof meta.cwd !== "string")
-      return [];
-    // Like Codex itself, skip subagent threads and scripted runs (exec, mcp)
-    // unless they were asked for; otherwise "latest" could be one of those.
-    // `codex exec resume` exists to continue scripted runs, so it includes them.
-    if (
-      target === "codex" &&
-      !includeNonInteractive &&
-      (isRecord(meta.source) ||
-        (!includeScripted && (meta.source === "exec" || meta.source === "mcp")))
-    )
-      return [];
-    let updated: number;
-    try {
-      updated = fs.statSync(file).mtimeMs;
-    } catch {
-      return [];
-    }
-    return [
-      {
-        id: meta.id,
-        cwd: meta.cwd,
-        title: meta.id,
-        file,
-        updated,
-      },
-    ];
-  });
+  const sessions = files(path.resolve(root), 3).flatMap(
+    (file): SavedSession[] => {
+      const entry = header(file);
+      const meta =
+        entry?.type === "session_meta" ? record(entry.payload) : null;
+      if (!meta || typeof meta.id !== "string" || typeof meta.cwd !== "string")
+        return [];
+      // Like Codex itself, skip subagent threads and scripted runs (exec, mcp)
+      // unless they were asked for; otherwise "latest" could be one of those.
+      // `codex exec resume` exists to continue scripted runs, so it includes them.
+      if (
+        !includeNonInteractive &&
+        (isRecord(meta.source) ||
+          (!includeScripted &&
+            (meta.source === "exec" || meta.source === "mcp")))
+      )
+        return [];
+      let updated: number;
+      try {
+        updated = fs.statSync(file).mtimeMs;
+      } catch {
+        return [];
+      }
+      return [
+        {
+          id: meta.id,
+          cwd: meta.cwd,
+          title: meta.id,
+          file,
+          updated,
+        },
+      ];
+    },
+  );
   // Both subscription and API sessions are eligible. Native provider filtering
   // would hide the very conversation the user wants to continue through cn.
   return sessions
@@ -282,6 +240,13 @@ async function choose(
   }
 }
 
+export async function chooseOpenCodeSession(
+  executable: string,
+  env: Environment,
+) {
+  return choose("opencode", openCodeSessions(executable, env), false, env);
+}
+
 function without(args: string[], flags: string[], valued: string[] = []) {
   const result: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -308,7 +273,7 @@ export async function resolveSessionArgs(
   args: string[],
   env: Environment,
 ): Promise<string[] | null> {
-  if (target === "claude") return args;
+  if (target === "claude" || target === "pi") return args;
   if (target === "codex") {
     const index =
       args[0] === "resume"
@@ -331,7 +296,7 @@ export async function resolveSessionArgs(
     const cwd = hasOption(rest, "--all") ? "" : process.cwd();
     const chosen = await choose(
       target,
-      localSessions("codex", env, cwd, undefined, {
+      codexSessions(env, cwd, {
         includeNonInteractive: hasOption(rest, "--include-non-interactive"),
         includeScripted: index === 1,
       }),
@@ -351,79 +316,16 @@ export async function resolveSessionArgs(
         ]
       : null;
   }
-  const pi = target === "pi";
-  const requested = optionValue(args, "--session", ...(pi ? [] : ["-s"]));
+  if (optionValue(args, "--session", "-s")) return args;
   const last = hasOption(args, "--continue", "-c");
-  const picker = hasOption(
-    args,
-    pi ? "--resume" : "--cn-resume",
-    ...(pi ? ["-r"] : []),
-  );
-  if (!requested && !last && !picker) return args;
-  // Exact v2 IDs are validated by the model-switch API, which returns 404 for
-  // missing sessions. Do not exclude older sessions because of a list limit.
-  // The arguments stay where they are: a subcommand such as `run` owns them.
-  if (!pi && requested && supportsStandalone(executable)) return args;
-  let sessions: SavedSession[];
-  if (
-    pi &&
-    requested &&
-    (requested.includes("/") || requested.endsWith(".jsonl"))
-  ) {
-    const file = path.resolve(requested.replace(/^~(?=\/)/, home(env)));
-    const value = header(file);
-    if (value?.type !== "session" || typeof value.id !== "string")
-      throw new CnError("The Pi session path is not a readable saved session.");
-    sessions = [
-      {
-        id: value.id,
-        file,
-        cwd: typeof value.cwd === "string" ? value.cwd : process.cwd(),
-        title: value.id,
-        updated: fs.statSync(file).mtimeMs,
-      },
-    ];
-  } else
-    sessions = pi
-      ? localSessions(
-          "pi",
-          env,
-          process.cwd(),
-          optionValue(args, "--session-dir"),
-        )
-      : openCodeSessions(executable, env);
-  const matches = requested
-    ? sessions.filter(
-        (session) =>
-          session.id === requested ||
-          (pi && session.file === path.resolve(requested)) ||
-          session.id.startsWith(requested),
-      )
-    : sessions;
-  if (requested && matches.length !== 1)
-    throw new CnError(
-      matches.length
-        ? "Session ID is ambiguous. Use its full ID."
-        : `No saved ${target} session matches that ID. Check the project directory and session storage.`,
-    );
-  const chosen = requested
-    ? matches[0]
-    : await choose(target, matches, last, env);
+  if (!last) return args;
+  // OpenCode v2 persists a session's model. Resolve its native --continue to
+  // an ID so the adapter can select Concentrate before the session starts.
+  // OpenCode owns the session list; cn never presents a separate picker.
+  const sessions = openCodeSessions(executable, env);
+  const chosen = await choose(target, sessions, true, env);
   if (!chosen) return null;
-  const remaining = without(
-    args,
-    ["--continue", "-c", "--resume", "-r", "--cn-resume"],
-    ["--session", ...(pi ? [] : ["-s"])],
-  );
-  if (pi)
-    return [
-      "--session",
-      chosen.file!,
-      ...(hasOption(remaining, "--session-dir")
-        ? []
-        : ["--session-dir", path.dirname(chosen.file!)]),
-      ...remaining,
-    ];
+  const remaining = without(args, ["--continue", "-c"], ["--session", "-s"]);
   return withSessionFlag(remaining, chosen.id);
 }
 

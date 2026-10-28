@@ -155,3 +155,15 @@ test("an unreadable bundled Codex catalog leaves the destination untouched", () 
   );
   assert.equal(fs.readFileSync(destination, "utf8"), "previous catalog");
 });
+
+test("Codex catalog validation accepts output larger than the subprocess buffer", () => {
+  const dir = tempDir();
+  const executable = path.join(dir, "codex");
+  fs.writeFileSync(
+    executable,
+    `#!${process.execPath}\nif (process.argv.includes('--bundled')) console.log(JSON.stringify({models:[{slug:'gpt-5.5'}]})); else process.stdout.write('x'.repeat(2 * 1024 * 1024));\n`,
+    { mode: 0o755 },
+  );
+  const destination = path.join(dir, "models.json");
+  assert.equal(writeCodexCatalog(executable, models, destination), destination);
+});

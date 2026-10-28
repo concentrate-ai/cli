@@ -17,6 +17,7 @@ import {
   routingModelId,
 } from "./catalog.js";
 import { CnError, EXIT } from "./errors.js";
+import { isOpenAiModel } from "./safe.js";
 import { getHarness } from "./harnesses/registry.js";
 import { readPreferences, resolveKey, writePreferences } from "./settings.js";
 import { ledger } from "./ui/layout.js";
@@ -74,7 +75,6 @@ function isResume(harnessId: HarnessId, args: string[]) {
     "-c",
     "--session",
     "-s",
-    "--cn-resume",
   );
 }
 
@@ -145,6 +145,11 @@ export async function launch(
   if (sessionArgs === null) return 0;
   forwarded = sessionArgs;
 
+  if (harnessId === "codex" && override && !isOpenAiModel(override))
+    throw new CnError(
+      `Codex is limited to OpenAI models for now. ${override} is not supported.`,
+      EXIT.USAGE,
+    );
   let model = override || readPreferences(env)[harnessId];
   let available: Model[];
   let catalogLoaded = false;
@@ -192,6 +197,17 @@ export async function launch(
     );
   }
 
+  // Best effort: a hint that cannot be built is simply not shown.
+  try {
+    const hint = tty ? prepared.resumeHint?.() : null;
+    if (hint)
+      console.error(
+        ledger("ok", "resume", `Resume through Concentrate: ${hint}`),
+      );
+  } catch {
+    /* No hint. */
+  }
+
   // Remembering is best effort and must never change the tool's exit code. Model
   // switches only happen in interactive sessions, so scripted runs are left alone.
   try {
@@ -213,7 +229,5 @@ export async function launch(
   } finally {
     prepared.cleanup();
   }
-  if (tty && prepared.resumeHint)
-    console.error(`Resume through Concentrate: ${prepared.resumeHint}`);
   return code;
 }

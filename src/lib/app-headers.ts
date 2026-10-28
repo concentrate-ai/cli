@@ -61,6 +61,18 @@ export function codexConfigArguments(forwarded: string[]) {
   return { overrides, args };
 }
 
+// Codex rejects a provider that has both a credential helper and an env_key.
+export function codexProviderUsesHelper(env: Environment) {
+  const directory =
+    env.CODEX_HOME || path.join(env.HOME || os.homedir(), ".codex");
+  try {
+    const config = configDocument(path.join(directory, "config.toml"), "toml");
+    return Boolean(record(record(config.model_providers).concentrate).auth);
+  } catch {
+    return false;
+  }
+}
+
 export function codexHeaderConfig(
   provider: string,
   env: Environment,
@@ -92,12 +104,9 @@ export function codexHeaderConfig(
       }
     }
   }
-  const providers = documents.flatMap((doc) => {
-    const configured = record(doc.model_providers);
-    return provider === "concentrate"
-      ? [record(configured.cn_concentrate), record(configured[provider])]
-      : [record(configured[provider])];
-  });
+  const providers = documents.map((doc) =>
+    record(record(doc.model_providers)[provider]),
+  );
   const headers = appHeaders(
     "codex",
     ...providers.map((entry) => entry.http_headers),
@@ -123,14 +132,6 @@ export function codexHeaderConfig(
       ...providers.map((entry) => entry.env_http_headers),
     ),
   };
-}
-
-export function codexHeaders(
-  provider: string,
-  env: Environment,
-  forwarded: string[] = [],
-) {
-  return codexHeaderConfig(provider, env, forwarded).http_headers;
 }
 
 export function openCodeHeaders(

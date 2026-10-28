@@ -22,6 +22,13 @@ const CATALOG = [
     codex: true,
     chat_candidate: true,
   },
+  {
+    id: "gpt-5.4",
+    name: "GPT",
+    claude: false,
+    codex: true,
+    chat_candidate: true,
+  },
 ];
 
 function rig({ catalog = true } = {}) {
@@ -171,69 +178,41 @@ require("node:child_process").execFileSync("/usr/bin/mkfifo", [path.join(dir, op
   assert.equal(r.configWritten(), false);
 });
 
-// Like the real Pi: writes <time>_<session-id>.jsonl in --session-dir.
-const piWrites = (provider, ...models) => `
-const dir = opt("--session-dir"), id = opt("--session-id") || "unpinned";
-if (dir) {
-  const change = (modelId) => JSON.stringify({ type: "model_change", provider: ${JSON.stringify(provider)}, modelId });
-  fs.writeFileSync(path.join(dir, "2026-10-13T19-12-53-933Z_" + id + ".jsonl"),
-    [JSON.stringify({ type: "session" }), ...${JSON.stringify(models)}.map(change)].join("\\n") + "\\n");
-}`;
-
-test("pi: a model switched inside Pi is remembered from its pinned session", async () => {
+test("pi owns session IDs and writes to its normal session store", async () => {
   const r = rig();
-  r.tool(
-    "pi",
-    piWrites("concentrate", "deepseek-v4-1-flash", "claude-opus-4-6"),
-  );
-  await r.run("pi");
-  assert.equal(r.saved("pi"), "claude-opus-4-6");
-});
-
-test("pi: the model of the last reply counts when there was no explicit switch entry", async () => {
-  const r = rig();
+  const agent = tempDir("cn-pi-native-");
+  r.env.PI_CODING_AGENT_DIR = agent;
+  const info = path.join(r.bin, "pi-info.json");
   r.tool(
     "pi",
     `
-fs.writeFileSync(path.join(opt("--session-dir"), "t_" + opt("--session-id") + ".jsonl"),
-  JSON.stringify({ type: "message", message: { role: "assistant", provider: "concentrate", model: "claude-opus-4-6" } }) + "\\n");`,
+const config = process.env.PI_CODING_AGENT_DIR;
+const sessions = path.join(config, "sessions");
+fs.writeFileSync(${JSON.stringify(info)}, JSON.stringify({args: argv, sessions: fs.realpathSync(sessions)}));
+fs.mkdirSync(path.join(sessions, "--project--"), {recursive:true});
+fs.writeFileSync(path.join(sessions, "--project--", "native-session.jsonl"), "saved conversation");`,
   );
-  await r.run("pi");
-  assert.equal(r.saved("pi"), "claude-opus-4-6");
-});
-
-test("pi: another provider, --no-session, and --session-dir=<dir> are handled", async () => {
-  const other = rig();
-  other.tool("pi", piWrites("other", "claude-opus-4-6"));
-  await other.run("pi");
-  assert.equal(other.configWritten(), false, "another provider");
-
-  const ephemeral = rig();
-  ephemeral.tool("pi", piWrites("concentrate", "claude-opus-4-6"));
-  await ephemeral.run("pi", { forwarded: ["--no-session"] });
-  assert.equal(ephemeral.configWritten(), false, "--no-session");
-
-  const own = rig();
-  const dir = tempDir("cn-own-sessions-");
-  own.tool(
-    "pi",
-    `fs.writeFileSync(${JSON.stringify(path.join(own.bin, "args.json"))}, JSON.stringify(argv));\n${piWrites("concentrate", "claude-opus-4-6")}`,
-  );
-  await own.run("pi", { forwarded: [`--session-dir=${dir}`] });
-  const args = JSON.parse(
-    fs.readFileSync(path.join(own.bin, "args.json"), "utf8"),
-  );
+  assert.equal(await r.run("pi"), 0);
+  const result = JSON.parse(fs.readFileSync(info, "utf8"));
+  assert.equal(result.args.includes("--session-id"), false);
+  assert.equal(result.args.includes("--session-dir"), false);
+  assert.equal(result.sessions, fs.realpathSync(path.join(agent, "sessions")));
   assert.equal(
-    args.filter((a) => a.startsWith("--session-dir")).length,
-    1,
-    "no second --session-dir",
+    fs.readFileSync(
+      path.join(agent, "sessions", "--project--", "native-session.jsonl"),
+      "utf8",
+    ),
+    "saved conversation",
   );
+  assert.equal(r.configWritten(), false);
 });
 
 test("pi: a failure while preparing removes the temporary directory", async () => {
   const r = rig();
   r.tool("pi", "");
-  fs.writeFileSync(path.join(r.config, "pi-sessions"), "not a directory");
+  const invalid = path.join(r.bin, "invalid-agent");
+  fs.writeFileSync(invalid, "not a directory");
+  r.env.PI_CODING_AGENT_DIR = invalid;
   const os = await import("node:os");
   const before = new Set(
     fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("cn-pi-")),
@@ -248,24 +227,26 @@ test("pi: a failure while preparing removes the temporary directory", async () =
 // Like the real Codex: a dated rollout file whose first line is a session_meta header.
 const codexWrites = (
   home,
-  { cwd = "process.cwd()", provider = "concentrate", name = "rollout-1" } = {},
+  {
+    cwd = "process.cwd()",
+    provider = "concentrate",
+    name = "rollout-1",
+    id = "session-1",
+  } = {},
   ...models
 ) => `
 const d = new Date(), two = (n) => String(n).padStart(2, "0");
 const dir = path.join(${JSON.stringify(home)}, "sessions", String(d.getFullYear()), two(d.getMonth() + 1), two(d.getDate()));
 fs.mkdirSync(dir, { recursive: true });
-const meta = JSON.stringify({ type: "session_meta", payload: { cwd: fs.realpathSync(${cwd}), model_provider: ${JSON.stringify(provider)} } });
+const meta = JSON.stringify({ type: "session_meta", payload: { id: ${JSON.stringify(id)}, cwd: fs.realpathSync(${cwd}), model_provider: ${JSON.stringify(provider)} } });
 const turn = (model) => JSON.stringify({ type: "turn_context", payload: { model } });
 fs.writeFileSync(path.join(dir, ${JSON.stringify(name)} + ".jsonl"), [meta, ...${JSON.stringify(models)}.map(turn)].join("\\n") + "\\n");`;
 
 test("codex: the model from this run's session is remembered", async () => {
   const r = rig();
-  r.tool(
-    "codex",
-    codexWrites(r.codexHome, {}, "deepseek-v4-1-flash", "claude-opus-4-6"),
-  );
+  r.tool("codex", codexWrites(r.codexHome, {}, "gpt-5.5", "gpt-5.4"));
   await r.run("codex");
-  assert.equal(r.saved("codex"), "claude-opus-4-6");
+  assert.equal(r.saved("codex"), "gpt-5.4");
 });
 
 test("codex: sessions from another directory or provider are ignored", async () => {
@@ -288,4 +269,24 @@ test("codex: sessions from another directory or provider are ignored", async () 
   );
   await provider.run("codex");
   assert.equal(provider.configWritten(), false, "other provider");
+});
+
+test("codex: after the session ends, cn prints the command that resumes it through Concentrate", async () => {
+  const r = rig();
+  r.tool(
+    "codex",
+    codexWrites(r.codexHome, { id: "01a1-resume-me" }, "gpt-5.5"),
+  );
+  const lines = [];
+  const original = console.error;
+  console.error = (...args) => lines.push(args.join(" "));
+  try {
+    await r.run("codex");
+  } finally {
+    console.error = original;
+  }
+  assert.ok(
+    lines.some((line) => line.includes("cn codex resume 01a1-resume-me")),
+    lines.join("\n"),
+  );
 });

@@ -20,7 +20,7 @@ import {
 } from "./commands.js";
 import { launch, which } from "./launch.js";
 import { getHarness, listHarnesses } from "./harnesses/registry.js";
-import { needsSetup, readPreferences, resolveKey } from "./settings.js";
+import { needsSetup, readPreferences, resolveKeyOrNull } from "./settings.js";
 import { caps, paint } from "./ui/term.js";
 import { glyphs } from "./ui/theme.js";
 import { select } from "./ui/widgets.js";
@@ -29,6 +29,7 @@ import { CnError } from "./errors.js";
 import { errorMessage } from "./validation.js";
 import { ledger } from "./ui/layout.js";
 import { clearScreen, openScreen } from "./ui/screen.js";
+import { chooseOpenCodeSession } from "./sessions.js";
 
 const MANAGE: MenuItem[] = [
   {
@@ -79,7 +80,7 @@ function toolStatus(
 }
 
 export function menuItems(env: Environment, c = caps()) {
-  const { key, source } = resolveKey(env);
+  const { key, source } = resolveKeyOrNull(env);
   const preferences = readPreferences(env);
   const tools = listHarnesses().map((adapter) => {
     const installed = Boolean(which(adapter.binary, env.PATH));
@@ -99,7 +100,7 @@ export function menuItems(env: Environment, c = caps()) {
   const g = glyphs(c);
   const keyLine = key
     ? `${paint("ok", g.ok, {}, c)} ${paint("mute", source === "stored" ? "key saved" : "key from environment", {}, c)}`
-    : `${paint("focus", g.half, {}, c)} ${paint("mute", "no key yet", {}, c)}`;
+    : `${paint("focus", g.half, {}, c)} ${paint("mute", source === "invalid" ? "saved key needs replacing" : "no key yet", {}, c)}`;
   return {
     items: [
       { group: "launch" },
@@ -373,7 +374,7 @@ async function doctor(env: Environment) {
             note: which(tool.binary, env.PATH) || "Not installed",
             right: toolStatus(
               Boolean(which(tool.binary, env.PATH)),
-              Boolean(resolveKey(env).key),
+              Boolean(resolveKeyOrNull(env).key),
               caps(env),
             ),
           })),
@@ -407,7 +408,7 @@ async function doctor(env: Environment) {
 const RESUME_ARGS: Record<HarnessId, string[]> = {
   claude: ["--resume"],
   codex: ["resume"],
-  opencode: ["--cn-resume"],
+  opencode: ["--continue"],
   pi: ["--resume"],
 };
 
@@ -433,11 +434,18 @@ async function resumePicker(
   );
   if (choice.cancel || choice.value === "back") return;
   const target = choice.value as HarnessId;
-  if (!which(getHarness(target).binary, env.PATH)) return;
+  const executable = which(getHarness(target).binary, env.PATH);
+  if (!executable) return;
+  let forwarded = RESUME_ARGS[target];
+  if (target === "opencode") {
+    const session = await chooseOpenCodeSession(executable, env);
+    if (!session) return;
+    forwarded = ["--session", session.id];
+  }
   screen.suspend();
   let code;
   try {
-    code = await launch(target, { forwarded: RESUME_ARGS[target] }, env);
+    code = await launch(target, { forwarded }, env);
   } finally {
     screen.resume();
   }

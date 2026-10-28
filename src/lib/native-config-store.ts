@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { CnError } from "./errors.js";
 import { parseConfig, setConfig, type ConfigFormat } from "./config-formats.js";
 import { readJson, writeJson } from "./settings.js";
-import { isRecord } from "./validation.js";
+import { errorCode, isRecord } from "./validation.js";
 
 export interface ConfigChange {
   retainOnEditedFile?: boolean;
@@ -144,24 +144,68 @@ function receipt(file: string, allowed: string[]): Receipt | null {
 }
 
 export function hasNativeSetup(state: string) {
-  const data = readJson(state);
-  return data.version === 1 && data.active === true;
+  try {
+    const data = readJson(state);
+    return data.version === 1 && data.active === true;
+  } catch (error) {
+    // A damaged or loose-mode receipt cannot be trusted or restored from, and
+    // must not stop logout, global reset, or the menus.
+    if (error instanceof CnError) return false;
+    throw error;
+  }
+}
+
+const LOCK_STALE_MS = 10 * 60 * 1000;
+
+function processAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means it exists but belongs to someone else.
+    return errorCode(error) === "EPERM";
+  }
+}
+
+// A lock left by a killed or interrupted run must not block the tool forever.
+function lockIsStale(lock: string) {
+  try {
+    const owner = Number(fs.readFileSync(path.join(lock, "pid"), "utf8"));
+    if (Number.isInteger(owner) && owner > 0) return !processAlive(owner);
+    return Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS;
+  } catch {
+    try {
+      return Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS;
+    } catch {
+      return true;
+    }
+  }
 }
 
 export function withSetupLock<T>(directory: string, work: () => T): T {
   ensureDirectory(directory);
   const lock = path.join(directory, ".lock");
-  try {
-    fs.mkdirSync(lock, { mode: 0o700 });
-  } catch {
-    throw new CnError(
-      `Another tool configuration is in progress. If it was interrupted, remove ${lock} and retry.`,
-    );
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.mkdirSync(lock, { mode: 0o700 });
+      break;
+    } catch {
+      if (attempt === 0 && lockIsStale(lock)) {
+        fs.rmSync(lock, { recursive: true, force: true });
+        continue;
+      }
+      throw new CnError(
+        `Another tool configuration is in progress. If it was interrupted, remove ${lock} and retry.`,
+      );
+    }
   }
   try {
+    fs.writeFileSync(path.join(lock, "pid"), String(process.pid), {
+      mode: 0o600,
+    });
     return work();
   } finally {
-    fs.rmdirSync(lock);
+    fs.rmSync(lock, { recursive: true, force: true });
   }
 }
 

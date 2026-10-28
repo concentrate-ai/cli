@@ -54,7 +54,7 @@ test("summarize maps integration flags and chat candidacy", () => {
 test("modelsFor filters by the tool's flag", () => {
   const models = [
     { id: "a", claude: true, codex: false, chat_candidate: false },
-    { id: "b", claude: false, codex: true, chat_candidate: true },
+    { id: "gpt-b", claude: false, codex: true, chat_candidate: true },
   ];
   assert.deepEqual(
     modelsFor("claude", models).map((m) => m.id),
@@ -62,11 +62,11 @@ test("modelsFor filters by the tool's flag", () => {
   );
   assert.deepEqual(
     modelsFor("codex", models).map((m) => m.id),
-    ["b"],
+    ["gpt-b"],
   );
   assert.deepEqual(
     modelsFor("pi", models).map((m) => m.id),
-    ["b"],
+    ["gpt-b"],
   );
 });
 

@@ -18,10 +18,15 @@ import {
 import {
   configureTool,
   resetTool,
+  codexProviderPresent,
+  configureCodexProvider,
   toolConfigured,
   refreshConfiguredKey,
 } from "./tool-config.js";
+import fs from "node:fs";
+import path from "node:path";
 import { CnError } from "./errors.js";
+import { errorMessage } from "./validation.js";
 import { isApiKey } from "./safe.js";
 import { getHarness, listHarnesses } from "./harnesses/registry.js";
 import { which } from "./launch.js";
@@ -33,6 +38,7 @@ import {
   readPreferences,
   environmentKey,
   readStoredKey,
+  readStoredKeyOrNull,
   resetState,
   resetTargets,
   resolveKey,
@@ -85,7 +91,6 @@ async function promptModelPlain(
   harnessId: HarnessId,
   current: string,
   catalog: Model[],
-  _env: Environment,
 ) {
   current = routingModelId(catalog, current);
   const available = modelsFor(harnessId, catalog);
@@ -131,9 +136,8 @@ async function chooseModel(
   harnessId: HarnessId,
   current: string,
   catalog: Model[],
-  env: Environment,
 ): Promise<string | null> {
-  if (!interactive()) return promptModelPlain(harnessId, current, catalog, env);
+  if (!interactive()) return promptModelPlain(harnessId, current, catalog);
   const c = caps();
   current = routingModelId(catalog, current);
   const candidates = modelsFor(harnessId, catalog);
@@ -177,6 +181,59 @@ async function promptKey(existing: string | null, inherited: string | null) {
   return key;
 }
 
+const CODEX_PROVIDER_DECLINED = "codex-provider-declined";
+
+// Conversations started by `cn codex` can only be reopened by plain `codex resume`
+// if Codex knows the Concentrate provider. Asked once; only adds that provider.
+export async function offerCodexResume(env: Environment) {
+  const declined = path.join(configDir(env), CODEX_PROVIDER_DECLINED);
+  if (
+    !interactive(env) ||
+    !readStoredKey(env) ||
+    fs.existsSync(declined) ||
+    toolConfigured("codex", env) ||
+    codexProviderPresent(env)
+  )
+    return;
+  const choice = await select(
+    {
+      title: "Open these conversations with plain codex too?",
+      items: [
+        {
+          value: "yes",
+          label: "Yes, add Concentrate to Codex",
+          note: "Adds one provider to ~/.codex/config.toml. Your default model and login stay the same. Undo with cn reset codex.",
+        },
+        {
+          value: "no",
+          label: "No thanks",
+          note: "Resume with cn codex resume instead. Won't ask again.",
+        },
+      ],
+      hints: [
+        ["↑↓", "move"],
+        ["↵", "choose"],
+        ["esc", "ask next time"],
+      ],
+    },
+    env,
+  );
+  if (choice.cancel) return;
+  if (choice.value === "no") {
+    fs.mkdirSync(configDir(env), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(declined, "", { mode: 0o600 });
+    return;
+  }
+  const file = configureCodexProvider(env);
+  console.log(
+    ledger(
+      "ok",
+      "codex",
+      `Concentrate added to ${file}. Quit Codex apps and reopen to see it.`,
+    ),
+  );
+}
+
 export function maskKey(key: string) {
   const tail = key.length >= 12 ? key.slice(-4) : "";
   return "•".repeat(8) + tail;
@@ -185,7 +242,7 @@ export function maskKey(key: string) {
 // Offers a key that is already around instead of asking for it again. A key
 // found only in the environment is used in place and not copied to disk.
 async function chooseKey(env: Environment) {
-  const stored = readStoredKey(env);
+  const stored = readStoredKeyOrNull(env);
   const fromEnv = environmentKey(env);
   const found = stored || fromEnv;
   if (interactive(env) && found) {
@@ -257,8 +314,7 @@ export async function runSetup(
       );
     }
     for (const id of HARNESS_IDS) {
-      models[id] =
-        (await chooseModel(id, models[id], catalog, env)) ?? models[id];
+      models[id] = (await chooseModel(id, models[id], catalog)) ?? models[id];
       console.log(
         ledger("ok", getHarness(id as HarnessId).label, models[id], c),
       );
@@ -291,7 +347,7 @@ export async function runKey(
   { verify = true } = {},
   env: Environment = process.env,
 ) {
-  const key = await promptKey(readStoredKey(env), environmentKey(env));
+  const key = await promptKey(readStoredKeyOrNull(env), environmentKey(env));
   if (verify)
     await step("checking the key", "key", () => validateKey(key), "verified");
   writeKey(key, env);
@@ -307,18 +363,31 @@ export async function runKey(
 }
 
 export function runLogout(env: Environment = process.env) {
+  // Removing the key comes first in importance: a tool that cannot be reset
+  // (Cursor running, a damaged config) must not keep the saved key on disk.
   for (const id of ["opencode", "cursor"] as const) {
-    if (!toolConfigured(id, env)) continue;
-    const result = resetTool(id, env);
-    for (const field of result.preserved)
-      console.log(ledger("warn", "kept edit", field));
-    console.log(
-      ledger(
-        "info",
-        id === "cursor" ? "Cursor desktop" : "OpenCode",
-        "saved integration reset to remove its native copy of the key",
-      ),
-    );
+    const label = id === "cursor" ? "Cursor desktop" : "OpenCode";
+    try {
+      if (!toolConfigured(id, env)) continue;
+      const result = resetTool(id, env);
+      for (const field of result.preserved)
+        console.log(ledger("warn", "kept edit", field));
+      console.log(
+        ledger(
+          "info",
+          label,
+          "saved integration reset to remove its native copy of the key",
+        ),
+      );
+    } catch (error) {
+      console.log(
+        ledger(
+          "warn",
+          label,
+          `could not be reset (${errorMessage(error)}); its copy of the key remains. Fix that, then run cn reset ${id}.`,
+        ),
+      );
+    }
   }
   console.log(
     deleteStoredKey(env)
@@ -443,7 +512,7 @@ export async function runModel(
     } catch {
       // continue with an empty catalog; the user can still type an ID
     }
-    const chosen = await chooseModel(target, models[target], catalog, env);
+    const chosen = await chooseModel(target, models[target], catalog);
     if (chosen === null) {
       console.log(
         ledger("mute", getHarness(target).label, `kept ${models[target]}`),

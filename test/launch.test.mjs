@@ -21,6 +21,8 @@ function setup(extraEnv = {}) {
       PATH: `${bin}:${nodeDir}`,
       CN_CONFIG_HOME: config,
       CONCENTRATE_API_KEY: "sk-test",
+      // Never read the developer's real Codex config.
+      CODEX_HOME: tempDir("cn-codex-home-"),
       ...extraEnv,
     },
   };
@@ -324,6 +326,7 @@ test("codex gets per-run provider overrides and the key only in env", () => {
   assert.equal(seen.env.CONCENTRATE_API_KEY, "sk-test");
   const joined = seen.args.join("\n");
   assert.match(joined, /model_provider="concentrate"/);
+  assert.match(joined, /model_catalog_json=/);
   assert.match(
     joined,
     /model_providers\.concentrate\.base_url="https:\/\/api\.concentrate\.ai\/v1"/,
@@ -333,8 +336,76 @@ test("codex gets per-run provider overrides and the key only in env", () => {
     /model_providers\.concentrate\.env_key="CONCENTRATE_API_KEY"/,
   );
   assert.ok(!joined.includes("sk-test"));
-  assert.equal(seen.args[seen.args.indexOf("-m") + 1], "deepseek-v4-1-flash");
+  assert.equal(seen.args[seen.args.indexOf("-m") + 1], "gpt-6.1-terra");
   assert.deepEqual(seen.args.slice(-2), ["exec", "hi"]);
+});
+
+test("codex omits env_key when the saved provider already has a credential helper", () => {
+  const codexHome = tempDir("cn-codex-home-");
+  const { bin, env } = setup({ CODEX_HOME: codexHome });
+  const record = fakeTool(bin, "codex");
+  fs.writeFileSync(
+    path.join(codexHome, "config.toml"),
+    '[model_providers.concentrate.auth]\ncommand = "/tmp/helper"\n',
+  );
+  assert.equal(runCn(["codex", "--", "exec", "hi"], { env }).status, 0);
+  assert.ok(!record().args.join("\n").includes("env_key"));
+  fs.writeFileSync(path.join(codexHome, "config.toml"), 'model = "x"\n');
+  assert.equal(runCn(["codex", "--", "exec", "hi"], { env }).status, 0);
+  assert.match(record().args.join("\n"), /env_key="CONCENTRATE_API_KEY"/);
+});
+
+test("codex runs without the shared background server", () => {
+  const { bin, env } = setup();
+  const record = fakeTool(bin, "codex");
+  const result = runCn(["codex", "--", "exec", "hi"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(record().args.includes("--no-daemon"));
+});
+
+test("codex is limited to OpenAI models", async () => {
+  const { modelsFor } = await import("../dist/lib/catalog.js");
+  const models = [
+    "gpt-5.5",
+    "o3",
+    "gpt-oss-120b",
+    "grok-4.7",
+    "gemini-3.8-flash",
+  ].map((id) => ({ id, codex: true, chat_candidate: true }));
+  assert.deepEqual(
+    modelsFor("codex", models).map((m) => m.id),
+    ["gpt-5.5", "o3"],
+  );
+});
+
+test("a saved non-OpenAI Codex default falls back, and --model refuses one", () => {
+  const { bin, env } = setup();
+  const record = fakeTool(bin, "codex");
+  fs.writeFileSync(
+    path.join(env.CN_CONFIG_HOME, "config.json"),
+    JSON.stringify({ models: { codex: "grok-4.7" } }),
+    { mode: 0o600 },
+  );
+  const result = runCn(["codex", "--", "exec", "hi"], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const { args } = record();
+  assert.equal(args[args.indexOf("-m") + 1], "gpt-6.1-terra");
+  const refused = runCn(["codex", "--model", "grok-4.7"], { env });
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /limited to OpenAI models/);
+});
+
+test("codex resumes directly with the original session ID and Concentrate settings", () => {
+  const { bin, env } = setup({ CODEX_HOME: tempDir("cn-codex-home-") });
+  const record = fakeTool(bin, "codex");
+  const session = "01a1830a-36f8-76c0-acb6-e82b2183af2b";
+  const result = runCn(["codex", "resume", session], { env });
+  assert.equal(result.status, 0, result.stderr);
+  const seen = record();
+  assert.deepEqual(seen.args.slice(-2), ["resume", session]);
+  assert.equal(seen.args.includes("--remote"), false);
+  assert.match(seen.args.join("\n"), /model_provider="concentrate"/);
+  assert.equal(seen.env.CONCENTRATE_API_KEY, "sk-test");
 });
 
 test("pi runs against a temporary agent dir that is removed afterwards", () => {
@@ -349,7 +420,8 @@ test("pi runs against a temporary agent dir that is removed afterwards", () => {
     "--model",
     "deepseek-v4-1-flash",
   ]);
-  assert.ok(seen.args.includes("--session-dir"));
+  assert.equal(seen.args.includes("--session-dir"), false);
+  assert.equal(seen.args.includes("--session-id"), false);
   assert.match(seen.env.PI_CODING_AGENT_DIR, /cn-pi-/);
   assert.equal(
     fs.existsSync(seen.env.PI_CODING_AGENT_DIR),

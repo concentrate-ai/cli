@@ -129,6 +129,19 @@ function helperScript(env: Environment) {
   return `#!/bin/sh\n# Concentrate native configuration credential helper\nexec ${quote(process.execPath)} ${quote(fileURLToPath(new URL("../bin/cn.js", import.meta.url)))} --credential-helper ${quote(configDir(env))}\n`;
 }
 
+const codexProviderTable = (helper: string, env: Environment) => ({
+  name: "Concentrate AI",
+  base_url: `${API_ROOT}/v1`,
+  wire_api: "responses",
+  ...codexHeaderConfig("concentrate", env),
+  auth: {
+    command: helper,
+    args: [],
+    timeout_ms: 10000,
+    refresh_interval_ms: 300000,
+  },
+});
+
 function jsonPlan(file: string, entries: [string[], unknown][]): ConfigPlan {
   return {
     file,
@@ -310,7 +323,7 @@ export async function configureTool(
       file: files.settings,
       format: "toml",
       changes: [
-        { key: ["model_provider"], value: "cn_concentrate" },
+        { key: ["model_provider"], value: "concentrate" },
         { key: ["model"], value: model },
         { key: ["web_search"], value: "disabled" },
         {
@@ -319,25 +332,57 @@ export async function configureTool(
         },
         { key: ["model_catalog_json"], value: files.catalog },
         {
-          key: ["model_providers", "cn_concentrate"],
-          value: {
-            name: "Concentrate AI",
-            base_url: `${API_ROOT}/v1`,
-            wire_api: "responses",
-            ...codexHeaderConfig("cn_concentrate", env),
-            auth: {
-              command: files.helper,
-              args: [],
-              timeout_ms: 10000,
-              refresh_interval_ms: 300000,
-            },
-          },
+          key: ["model_providers", "concentrate"],
+          value: codexProviderTable(files.helper, env),
         },
       ],
     });
   }
   withSetupLock(toolSetupDir(id, env), () =>
     applyNativeSetup(receiptFile(id, env), plans),
+  );
+  return files.settings;
+}
+
+// Threads started by `cn codex` belong to the "concentrate" provider. Plain Codex
+// can only reopen them if its config defines it. Only the provider is added: the
+// default provider, model, and the user's login are left alone.
+export function codexProviderPresent(env: Environment = process.env) {
+  const files = toolConfigPaths("codex", env);
+  try {
+    return Boolean(
+      record(record(configDocument(files.settings, "toml").model_providers))
+        .concentrate,
+    );
+  } catch {
+    // An unreadable config is not ours to edit.
+    return true;
+  }
+}
+
+export function configureCodexProvider(env: Environment = process.env) {
+  if (!readStoredKey(env))
+    throw new CnError("Save your key with cn key first.");
+  const files = toolConfigPaths("codex", env);
+  withSetupLock(toolSetupDir("codex", env), () =>
+    applyNativeSetup(receiptFile("codex", env), [
+      {
+        file: files.helper,
+        format: "text",
+        mode: 0o700,
+        changes: [{ key: ["content"], value: helperScript(env) }],
+      },
+      {
+        file: files.settings,
+        format: "toml",
+        changes: [
+          {
+            key: ["model_providers", "concentrate"],
+            value: codexProviderTable(files.helper, env),
+          },
+        ],
+      },
+    ]),
   );
   return files.settings;
 }

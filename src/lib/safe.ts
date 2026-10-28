@@ -6,6 +6,10 @@ const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
 // Model IDs are passed to tools as option values, so they must not look like a flag.
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$/;
 
+// Codex speaks OpenAI's Responses API; gateways reject some of its fields for
+// other providers' models (gpt-oss is open-weight and served elsewhere).
+const OPENAI_MODEL = /^(gpt-(?!oss)|o\d)/;
+
 // Keys go into HTTP headers and child environments: printable ASCII, no spaces.
 const API_KEY = /^[\x21-\x7e]{1,1024}$/;
 
@@ -21,3 +25,7 @@ export function isModelId(value: unknown): value is string {
 export function isApiKey(value: unknown): value is string {
   return typeof value === "string" && API_KEY.test(value);
 }
+
+// A saved pinned choice may carry a provider prefix, such as "azure/gpt-5.5".
+export const isOpenAiModel = (id: string) =>
+  OPENAI_MODEL.test(id.split("/").pop() ?? id);

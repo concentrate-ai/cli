@@ -40,6 +40,10 @@ if (${JSON.stringify(name)} === "claude" && process.argv[2] === "plugin" && proc
   console.log(JSON.stringify({ outcome: "ok" }));
   process.exit(0);
 }
+if (${JSON.stringify(name)} === "codex" && process.argv[2] === "--help") {
+  console.log("      --no-daemon");
+  process.exit(0);
+}
 if (${JSON.stringify(name)} === "codex" && process.argv.includes("--bundled")) {
   console.log(JSON.stringify({ models: [${JSON.stringify(CODEX_TEMPLATE)}] }));
   process.exit(0);
