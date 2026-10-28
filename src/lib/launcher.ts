@@ -474,7 +474,15 @@ async function launcher(
 ) {
   const c = caps(env);
   let initial: string | undefined;
+  let firstRun = true;
   for (;;) {
+    // No key yet: ask for it before showing a menu where nothing can start.
+    // Esc skips it and opens the menu anyway.
+    if (firstRun) {
+      firstRun = false;
+      if (needsSetup(env))
+        await action(() => runSetup({ showHeader: false }, env), env);
+    }
     const menu = menuItems(env, c);
     const choice = await select(
       {

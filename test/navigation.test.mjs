@@ -49,3 +49,18 @@ test(
     assert.equal(result.status, 0, result.stderr || result.stdout);
   },
 );
+
+test(
+  "with no saved key, cn asks for it before showing the home menu",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("./fixtures/first-run-key.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 20000,
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  },
+);
