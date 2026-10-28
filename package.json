@@ -1,8 +1,8 @@
 {
   "name": "@concentrate/cli",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "private": true,
-  "description": "Concentrate AI: one key for every coding agent",
+  "description": "Concentrate AI: one key for every coding agent (beta)",
   "type": "module",
   "bin": {
     "cn": "./dist/bin/cn.js"
@@ -23,19 +23,16 @@
     "format:check": "prettier --check src test scripts package.json tsconfig.json eslint.config.js",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
     "prepack": "npm run build",
-    "release:pack": "npm run build && node scripts/package-release.mjs",
-    "release:stage": "npm run release:pack && node scripts/stage-downloads.mjs"
+    "release:pack": "npm run build && node scripts/package-release.mjs"
   },
   "devDependencies": {
     "@types/node": "^18.19.130",
-    "@types/ws": "8.18.2",
     "esbuild": "0.25.12",
     "eslint": "^9.39.5",
     "jsonc-parser": "3.3.1",
     "prettier": "^3.9.10",
     "smol-toml": "1.9.1",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.72.0",
-    "ws": "8.22.0"
+    "typescript-eslint": "^8.72.0"
   }
 }

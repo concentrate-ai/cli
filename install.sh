@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Installs the Concentrate AI CLI (`cn`). Runs on Node.js 18.18+. Source checkouts need npm to build.
 #   From a checkout:   ./install.sh
-#   From the web:      curl -fsSL https://concentrate.ai/cli/install.sh | bash
-# Piped from the web, downloads a built, checksummed CLI release.
-# Set CN_INSTALL_VERSION=0.1.1 to pin a release; the default is latest.
+#   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
+# Piped from the web, downloads a built, checksummed release from GitHub Releases.
+# Set CN_INSTALL_VERSION=0.1.0 to pin a release; the default is latest.
 set -euo pipefail
 
 MIN_NODE_MAJOR=18
 MIN_NODE_MINOR=18
-DOWNLOAD_ROOT="https://concentrate.ai/downloads/cli"
+RELEASES_URL="https://github.com/concentrate-ai/cli/releases"
 RELEASE_VERSION="${CN_INSTALL_VERSION:-latest}"
 script_dir=""
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
@@ -94,14 +94,14 @@ locate_package() {
     package_dir="$script_dir"
     return
   fi
-  local release_path="latest"
+  local release_url="$RELEASES_URL/latest/download"
   if [[ "$RELEASE_VERSION" != latest ]]; then
     local tag="${RELEASE_VERSION#v}"
     if [[ ! "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
-      echo "CN_INSTALL_VERSION must be a release version such as 0.1.1." >&2
+      echo "CN_INSTALL_VERSION must be a release version such as 0.1.0." >&2
       exit 1
     fi
-    release_path="v$tag"
+    release_url="$RELEASES_URL/download/v$tag"
   fi
   for tool in curl tar; do
     command -v "$tool" >/dev/null 2>&1 || { echo "Missing required command: $tool" >&2; exit 1; }
@@ -109,7 +109,6 @@ locate_package() {
   download_dir="$(mktemp -d)"
   local archive="$download_dir/concentrate-cli.tar.gz"
   local checksums="$download_dir/SHA256SUMS"
-  local release_url="$DOWNLOAD_ROOT/$release_path"
   echo "Downloading Concentrate AI CLI ($RELEASE_VERSION)..."
   local expected actual attempt
   for attempt in 1 2; do
@@ -157,8 +156,8 @@ if [[ -f "$package_dir/src/bin/cn.ts" ]]; then
   command -v npm >/dev/null 2>&1 || { echo "npm is required to build this source checkout." >&2; exit 1; }
   (
     cd "$package_dir"
-    # Reinstall when a tool is missing or the lockfile moved on (a new dependency such as ws).
-    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser || ! -d node_modules/ws || ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
+    # Reinstall when a tool is missing or the lockfile moved on.
+    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser || ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
       npm ci --include=dev --ignore-scripts
     fi
     npm run build

@@ -7,7 +7,7 @@
   - The key arrives only through an `apiKeyHelper` that reads it from the child's environment. This means your own `apiKeyHelper` or settings `env` block can't send another credential to Concentrate.
 - **The model catalog is untrusted input.** Names are stripped of terminal control characters (no escape-sequence injection), and IDs that could pass for a command-line flag are dropped.
 - **Remembering a model** only reads the session `cn` started:
-  - Claude and Pi get a pinned session ID.
+  - Claude gets a pinned session ID. Pi owns its session IDs and cn does not read them to remember models.
   - For Codex, a session counts only if it was created during the run, in the same directory, on the Concentrate provider.
   - Scripted runs, resumed sessions, and runs where you gave the tool a model flag are never remembered.
   - Remembering can't change the tool's exit code.

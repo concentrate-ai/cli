@@ -4,7 +4,7 @@
 
 Refresh the Claude Code compatible catalog with `cn models claude --refresh --limit 200`.
 
-Each tool's own model picker lists Concentrate models while it runs under `cn`. If you switch models inside the tool and quit, `cn` starts there next time. It reads the choice back from the tool's own session files, and only saves a model that differs from the launch model and exists in the catalog. If a tool's files look different than expected, nothing is saved. Codex's reader is untested against a real install.
+Each tool's own model picker lists Concentrate models while it runs under `cn`. Claude and Codex can remember an in-session model change as the next cn default by reading the session files; they save only a recognized model that differs from the launch model. Pi and OpenCode do not save in-session selections as cn defaults. Codex's reader is untested against a real install.
 
 Claude Code's picker includes every model marked Claude Code compatible in the catalog, with the selected model first. There is no shortlist limit.
 
@@ -22,9 +22,9 @@ Run `node research/capability-switch-probe.mjs` to verify outgoing fields with t
 
 ## Session history
 
-Claude Code, Codex, and Pi can remember model changes from the session launched by cn. Scripted runs, resumed sessions, and explicit forwarded model flags are not remembered. Codex session reading has not been verified against a real Codex installation. OpenCode model recall is not supported.
+Claude Code and Codex can remember model changes from the session launched by cn. Scripted runs, resumed sessions, and explicit forwarded model flags are not remembered. Codex session reading has not been verified against a real Codex installation. Pi and OpenCode model recall is not supported.
 
-Pass `--session-dir` yourself to Pi and cn reads that folder. With `--no-session` there is no history to read.
+Pi manages its own sessions in its normal directory, including `--session-dir` and `--no-session` overrides. Older cn sessions remain in `pi-sessions/` and can be opened by their full file path.
 
 ## OpenCode v1 and v2
 
@@ -44,7 +44,7 @@ Pi receives per-model `contextWindow`, `maxTokens`, input modalities, and reason
 
 ## Codex model capabilities
 
-Like Ori, cn reads the installed Codex client's bundled catalog with `codex debug models --bundled`, uses its standard `gpt-5.5` entry (or another standard entry) as a template, and passes the resulting file through `model_catalog_json`. This preserves the installed client's instructions, tool configuration, and catalog fields instead of inventing a schema. If no suitable template is available, catalog preparation fails and the launcher warns before using the normal picker.
+cn reads the installed Codex client's bundled catalog with `codex debug models --bundled`, uses its standard `gpt-5.5` entry (or another standard entry) as a template, and passes the resulting file through `model_catalog_json`. This preserves the installed client's instructions, tool configuration, and catalog fields instead of inventing a schema. If no suitable template is available, catalog preparation fails and the launcher warns before using the normal picker.
 
 The generated catalog replaces the model ID, context window, image support, and advertised reasoning levels. Context expansion is capped at the advertised window; OpenAI-specific response transport, hosted search, and speed tiers are disabled for Concentrate. The default effort prefers `medium`, then `low`, then the first supported level. Explicitly non-reasoning models have no reasoning choices. Missing context uses the bundled template's fallback; missing effort metadata offers no invented levels.
 
@@ -52,16 +52,14 @@ cn validates this catalog with the installed Codex client before using it. If va
 
 ## Permanent native configuration
 
-`cn configure <tool>` follows Ori’s setup/restore pattern: it records the previous values, writes native configuration, and leaves the original executable and shell profile in place. `cn reset <tool>` restores the original file bytes when untouched; when a file was edited, it restores fields still matching cn’s values and reports the edits it preserved. Changed helper/catalog files are retained rather than deleted. Restore records containing originals are private.
+`cn configure <tool>` records the previous values, writes native configuration, and leaves the original executable and shell profile in place. `cn reset <tool>` restores the original file bytes when untouched; when a file was edited, it restores fields still matching cn’s values and reports the edits it preserved. Changed helper/catalog files are retained rather than deleted. Restore records containing originals are private.
 
-- **Claude Code:** writes routing, a saved-key helper, the default model, and the model picker to `settings.json`. Configure also installs the existing capability mod through a private local marketplace. The installed Claude CLI prepares its plugin registration in an isolated directory; cn saves only that plugin’s native registration and files, with restore records. The mod follows context, output, and reasoning compatibility during direct launches as it does during `cn claude`. Explicit environment preferences are read at session startup. Session launches disable the saved copy and load a fresh mod from the current catalog. This needs Claude 2.1.287+ and mods enabled. It does not configure Claude Desktop gateway profiles. Copying Ori’s cache fields alone did not apply the expected custom-model windows in the tested headless session, so cn uses its tested mod rather than seeding those caches.
-- **Codex:** writes a named `cn_concentrate` provider with command-backed authentication and a persistent validated model catalog into `config.toml`. The CLI and desktop app share that file, but existing threads, selected profiles, and managed configuration can override defaults; cn does not migrate threads or restart the desktop app.
+- **Claude Code:** writes routing, a saved-key helper, the default model, and the model picker to `settings.json`. Configure also installs the existing capability mod through a private local marketplace. The installed Claude CLI prepares its plugin registration in an isolated directory; cn saves only that plugin’s native registration and files, with restore records. The mod follows context, output, and reasoning compatibility during direct launches as it does during `cn claude`. Explicit environment preferences are read at session startup. Session launches disable the saved copy and load a fresh mod from the current catalog. This needs Claude 2.1.287+ and mods enabled. It does not configure Claude Desktop gateway profiles. Seeding Claude’s cache fields alone did not apply the expected custom-model windows in the tested headless session, so cn uses a mod instead.
+- **Codex:** writes a `concentrate` provider (the same name `cn codex` launches use, so threads resume in either mode) with command-backed authentication and a persistent validated model catalog into `config.toml`. The CLI and desktop app share that file, but existing threads, selected profiles, and managed configuration can override defaults; cn does not migrate threads or restart the desktop app.
 - **OpenCode:** writes the installed generation’s provider shape and model metadata to the global JSON/JSONC configuration, and references a private credential file using OpenCode’s `{file:...}` substitution. `cn key` refreshes the native key when it still matches cn’s previous value; `cn logout` resets that integration. Restart any background OpenCode server after Configure or Reset.
-- **Pi:** writes the default provider/model to `settings.json` and the model catalog to `models.json`, with a command-backed key resolver. The existing providers and `auth.json` are preserved. Unlike Ori’s Pi setup, this uses Pi’s native custom-provider configuration rather than installing a provider extension.
+- **Pi:** writes the default provider/model to `settings.json` and the model catalog to `models.json`, with a command-backed key resolver. The existing providers and `auth.json` are preserved. This uses Pi’s native custom-provider configuration.
 
 The catalog is refreshed when Configure runs. Model changes made through `cn model` also attempt to refresh an already configured tool. Direct client sessions may save their own model choices. External environment variables and higher-priority project/managed settings can override native defaults, and Reset leaves those independently managed sources alone.
-
-The Ori reference was inspected from its packaged `0.15.7+d702b99` CLI (`harness setup --help` and `harness reset --help`), which advertises more setup targets than its published [overview](https://openrouter.ai/docs/guides/ori/harness). Native setup scope varies by harness; this implementation does not claim every desktop integration supported by Ori.
 
 ## Coding tool identification
 
@@ -75,7 +73,7 @@ The gateway must read this header before it can use it for reporting or routing.
 ## Cursor desktop
 
 `cn configure cursor` configures the Cursor desktop editor, following the native
-setup introduced in Ori `0.16.0+a55b08b`. It requires an initialized Cursor profile,
+setup. It requires an initialized Cursor profile,
 a saved Concentrate API key, `sqlite3`, and `pgrep`. Quit Cursor first; cn checks
 that it is closed instead of terminating or reopening the app.
 

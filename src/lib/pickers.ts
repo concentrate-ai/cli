@@ -251,8 +251,8 @@ export function writeCodexCatalog(
   destination: string,
   { env = process.env }: { env?: Environment } = {},
 ) {
-  // Follow Ori's approach: start with this Codex release's own model schema and
-  // instructions instead of maintaining a hand-written approximation of it.
+  // Start from this Codex release's own model schema and instructions instead
+  // of maintaining a hand-written approximation of it.
   const bundled = spawnSync(executable, ["debug", "models", "--bundled"], {
     env,
     encoding: "utf8",

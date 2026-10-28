@@ -79,16 +79,16 @@ function fixture() {
 }
 test("piped web install verifies a built release, needs no npm, preserves credentials and supports pinned releases", () => {
   const f = fixture();
-  const result = f.run({ CN_INSTALL_VERSION: "0.1.1" });
+  const result = f.run({ CN_INSTALL_VERSION: "0.1.0" });
   assert.equal(result.status, 0, result.stderr);
   const version = spawnSync(f.launcher, ["--version"], {
     env: f.env,
     encoding: "utf8",
   });
-  assert.equal(version.stdout.trim(), "0.1.1");
+  assert.equal(version.stdout.trim(), "0.1.0");
   assert.match(
     fs.readFileSync(f.env.CN_TEST_URLS, "utf8"),
-    /https:\/\/concentrate\.ai\/downloads\/cli\/v0\.1\.1\/concentrate-cli.tar.gz/,
+    /https:\/\/github\.com\/concentrate-ai\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,
   );
   assert.equal(fs.existsSync(path.join(f.runtime, "node_modules")), false);
   assert.equal(
