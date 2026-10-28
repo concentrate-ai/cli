@@ -64,3 +64,21 @@ test(
     assert.equal(result.status, 0, result.stderr || result.stdout);
   },
 );
+
+test(
+  "the key screen verifies in place, lets a rejected key be fixed, and never echoes it",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("./fixtures/key-entry.py", import.meta.url),
+    );
+    const harness = fileURLToPath(
+      new URL("./fixtures/key-entry-harness.mjs", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, harness], {
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+  },
+);

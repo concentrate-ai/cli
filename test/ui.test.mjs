@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { wordmark } from "../dist/lib/ui/brand.js";
 import { ledger, panel } from "../dist/lib/ui/layout.js";
+import { renderKeyEntry } from "../dist/lib/ui/onboarding.js";
 import { contextBar, formatTokens } from "../dist/lib/ui/models.js";
 import { caps, fit, paint, strip, visibleWidth } from "../dist/lib/ui/term.js";
 import { glyphs } from "../dist/lib/ui/theme.js";
@@ -349,4 +350,62 @@ test("a screen stops reacting to signals while a child tool owns the terminal", 
   screen.close();
   assert.equal(count(), before);
   assert.equal(fullScreenActive(), false);
+});
+
+test("the key screen is centered, fits any terminal, and never shows the key", () => {
+  const plain = {
+    tty: true,
+    color: 0,
+    unicode: true,
+    width: 99,
+    motion: false,
+  };
+  const secret = "sk-cn-v1-very-secret-value";
+  for (const status of ["idle", "busy", "error", "done"]) {
+    for (const [columns, rows] of [
+      [30, 8],
+      [36, 14],
+      [60, 18],
+      [100, 30],
+      [160, 50],
+    ]) {
+      const { lines, left, top } = renderKeyEntry(
+        {
+          value: secret,
+          status,
+          message: "Concentrate AI rejected this API key (HTTP 401)",
+          frame: 0,
+        },
+        columns,
+        rows,
+        plain,
+      );
+      assert.ok(lines.length <= rows, `${columns}x${rows} ${status}: too tall`);
+      assert.ok(
+        top + lines.length <= rows,
+        `${columns}x${rows}: runs off the bottom`,
+      );
+      for (const line of lines)
+        assert.ok(
+          left + visibleWidth(line) <= columns,
+          `${columns}x${rows} ${status}: a line is wider than the terminal`,
+        );
+      assert.ok(
+        !lines.join("\n").includes("secret"),
+        "the key must only be drawn as dots",
+      );
+    }
+  }
+  const wide = renderKeyEntry(
+    { value: "", status: "idle", message: "", frame: 0 },
+    100,
+    30,
+    plain,
+  );
+  const text = wide.lines.join("\n");
+  assert.match(text, /Connect your API key/);
+  assert.match(text, /Paste your key here/);
+  assert.match(text, /concentrate\.ai\/settings\/api-keys/);
+  assert.ok(wide.left > 10, "the card is centered horizontally");
+  assert.ok(wide.top > 3, "the card is centered vertically");
 });

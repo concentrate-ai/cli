@@ -20,11 +20,23 @@ import {
 } from "./commands.js";
 import { launch, which } from "./launch.js";
 import { getHarness, listHarnesses } from "./harnesses/registry.js";
-import { needsSetup, readPreferences, resolveKeyOrNull } from "./settings.js";
+import { validateKey } from "./catalog.js";
+import {
+  needsSetup,
+  readPreferences,
+  resolveKeyOrNull,
+  writeKey,
+} from "./settings.js";
 import { caps, paint } from "./ui/term.js";
 import { glyphs } from "./ui/theme.js";
+import { keyEntry } from "./ui/onboarding.js";
 import { select } from "./ui/widgets.js";
-import { configureTool, resetTool, toolConfigured } from "./tool-config.js";
+import {
+  configureTool,
+  refreshConfiguredKey,
+  resetTool,
+  toolConfigured,
+} from "./tool-config.js";
 import { CnError } from "./errors.js";
 import { errorMessage } from "./validation.js";
 import { ledger } from "./ui/layout.js";
@@ -480,8 +492,19 @@ async function launcher(
     // Esc skips it and opens the menu anyway.
     if (firstRun) {
       firstRun = false;
-      if (needsSetup(env))
-        await action(() => runSetup({ showHeader: false }, env), env);
+      if (needsSetup(env)) {
+        try {
+          const result = await keyEntry({ verify: validateKey }, env);
+          if ("key" in result) {
+            writeKey(result.key, env);
+            refreshConfiguredKey(env);
+          }
+        } catch (error) {
+          clearScreen("Unable to continue");
+          console.error(ledger("bad", "attention", errorMessage(error)));
+          await back(env);
+        }
+      }
     }
     const menu = menuItems(env, c);
     const choice = await select(

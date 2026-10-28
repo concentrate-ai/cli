@@ -110,7 +110,10 @@ function guardSignals(restore: () => void) {
 const PARTIAL_ESCAPE = /\x1b(?:\[[0-9;]*|O)?$/;
 const ESCAPE_WAIT_MS = 40;
 
-function readKeys(onKey: (key: Key) => void, onFail: (error: unknown) => void) {
+export function readKeys(
+  onKey: (key: Key) => void,
+  onFail: (error: unknown) => void,
+) {
   const { stdin, stdout } = process;
   let pending = "";
   let timer: ReturnType<typeof setTimeout> | undefined;
