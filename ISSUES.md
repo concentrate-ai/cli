@@ -106,7 +106,7 @@ OpenCode v1 and v2 are both supported.
 If `settings.json` or `models.json` in Pi's folder is a symbolic link, `cn` does
 not follow it yet. Use a regular file.
 
-## Cursor (early support)
+## Cursor (work in progress)
 
 - Quit Cursor completely before `cn configure cursor` or `cn reset cursor`.
 - Open Cursor once before configuring, so its settings exist.
@@ -133,7 +133,7 @@ folder it names, then try again.
 
 - Codex: OpenAI models only. Other models are rejected by the gateway for
   Codex's request format.
-- Cursor: early support, not tested in a full desktop session.
+- Cursor: work in progress, not tested in a full desktop session.
 - macOS and Linux only.
 - `cn` works with whatever version of each tool you have installed. If a tool
   updates and `cn` misbehaves, update `cn` first, then report it. The tools

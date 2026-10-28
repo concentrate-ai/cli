@@ -18,7 +18,7 @@ and the coding tools you want to use installed on your `PATH`.
 | OpenCode         | Works                                                |
 | Pi               | Works                                                |
 | Codex            | OpenAI models only for now. More models coming soon. |
-| Cursor (desktop) | Early support. Set up with `cn configure cursor`.    |
+| Cursor (desktop) | Work in progress. Set up with `cn configure cursor`. |
 
 ## Install
 
@@ -83,6 +83,8 @@ while you run through `cn`.
 - `cn models <tool>` shows what each tool can use, and `--search` filters the list.
 
 ## Cursor desktop
+
+Work in progress: expect changes.
 
 - `cn configure cursor` sets up the Cursor desktop editor. Quit Cursor first.
 - Cursor stores your key and sends requests through Cursor's servers. Tab
