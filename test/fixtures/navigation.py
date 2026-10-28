@@ -157,7 +157,8 @@ for termination in ('ctrl-c', 'sigterm'):
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
     with tempfile.TemporaryDirectory(prefix='cn-exit-') as directory:
         env = {**os.environ, 'CN_CONFIG_HOME': directory, 'CN_OFFLINE': '1',
-               'CN_NO_MOTION': '1', 'NO_COLOR': '1', 'TERM': 'xterm-256color'}
+               'CN_NO_MOTION': '1', 'NO_COLOR': '1', 'TERM': 'xterm-256color',
+               'CONCENTRATE_API_KEY': 'sk-exit-test'}
         child = subprocess.Popen([sys.argv[1], sys.argv[2]], stdin=slave, stdout=slave, stderr=slave, env=env)
         os.close(slave)
         try:
