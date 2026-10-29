@@ -154,3 +154,7 @@ since. Save your key first with `cn key`.
 - [Usage guide](docs/usage.md): resuming, models, and configuration in detail
 - [Tool compatibility](docs/compatibility.md) and [security](docs/security.md)
 - [Development](docs/development.md) and [publishing a release](docs/releases.md)
+
+## License
+
+[MIT](LICENSE) © 2026 Concentrate AI, Inc.
