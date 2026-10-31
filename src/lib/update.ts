@@ -282,15 +282,14 @@ async function updateCn(
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-  // The new version refreshes the tools, so they get its own settings format.
+  // The installer has already refreshed configured tools with the new version.
   const launcher = path.join(env.HOME || os.homedir(), ".local", "bin", "cn");
   if (fs.existsSync(launcher)) {
-    spawnSync(launcher, ["refresh"], { stdio: "inherit", env });
     console.log(`\nWhat's new since ${current}:\n`);
     spawnSync(launcher, ["changelog", "--since", current], {
       stdio: "inherit",
       env,
     });
-  } else await refreshConfiguredTools(env);
+  }
   return true;
 }

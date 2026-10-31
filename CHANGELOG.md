@@ -5,11 +5,12 @@
 - Pi keeps your MCP servers, extensions, and other settings under `cn pi`.
 - Pi and OpenCode show cost estimates with Concentrate prices.
 - `cn configure` stores the key in Pi and Codex directly, fixing Pi's
-  intermittent `credential-helper` errors. Run `cn refresh` once if you set them
-  up with 0.1.0.
+  intermittent `credential-helper` errors. Installing this version converts tools
+  you set up with 0.1.0 for you.
 - Claude Code keeps MCP servers you add during a `cn claude` session, and stays
   signed in to MCP servers between runs.
-- New `cn update` and `cn refresh`. `cn` offers new versions when you start it.
+- New `cn update`, `cn refresh`, and `cn changelog`. `cn` offers new versions
+  when you start it, and installing refreshes the tools you configured.
 - `cn logout` also removes the key copies in configured tools.
 
 ## 0.1.0

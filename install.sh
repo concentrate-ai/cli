@@ -211,6 +211,11 @@ launcher_temp=""
 install_committed=true
 
 printf '\nInstalled Concentrate AI at %s\n' "$launcher"
+# Bring tools set up with `cn configure` in line with this version (models,
+# prices, how the key is stored). Quiet when nothing is configured.
+if [[ -z "${CN_INSTALL_SKIP_REFRESH:-}" ]]; then
+  "$launcher" refresh || printf 'Run cn refresh to finish updating your configured tools.\n' >&2
+fi
 case ":$PATH:" in
   *":$bin_dir:"*) printf 'Run: cn\n' ;;
   *)

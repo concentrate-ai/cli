@@ -99,7 +99,8 @@ default. Undo either with `cn reset codex`.
 
 **`provider auth cannot be combined with env_key`** or **`... with experimental_bearer_token`**
 The Concentrate section of `~/.codex/config.toml` came from an older `cn`. Run
-`cn update` (or the install command), then `cn refresh`.
+`cn update` (or the install command); it refreshes Codex. If it still fails, run
+`cn refresh`.
 
 **Using your ChatGPT subscription and Concentrate**
 Run `codex` for your subscription and `cn codex` for Concentrate. `cn` does not
@@ -123,7 +124,8 @@ not follow it yet. Use a regular file.
 
 **Pi says `Failed to resolve API key ... credential-helper`**
 That setup came from `cn` 0.1.0, which asked a helper script for the key on
-every request. Run `cn update`, then `cn refresh`; Pi then keeps the key itself.
+every request. Install the latest `cn` (the install command, or `cn update`); it
+converts Pi to keep the key itself. If not, run `cn refresh`.
 
 **New models don't show up in a tool I configured**
 `cn configure` saves a copy of the model list. Run `cn refresh` to update it.

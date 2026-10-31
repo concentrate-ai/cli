@@ -154,7 +154,8 @@ since. Save your key first with `cn key`.
   only by you. Claude Code gets it from `cn` when it starts.
 - `cn key` updates those copies, and `cn logout` removes them.
 - Run `cn refresh` to pick up new models and prices.
-- Set up a tool with `cn` 0.1.0? Run `cn refresh` once after updating.
+- Installing or updating `cn` refreshes your configured tools for you. If it
+  reports a problem, fix it and run `cn refresh`.
 
 ## Your key and privacy
 
