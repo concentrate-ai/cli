@@ -23,6 +23,7 @@ import { closePrompts } from "./prompt.js";
 import { needsSetup, readStoredKey } from "./settings.js";
 import { ledger } from "./ui/layout.js";
 import { interactive } from "./ui/widgets.js";
+import { changesSince, readChangelog } from "./changelog.js";
 import { offerUpdate, refreshConfiguredTools, runUpdate } from "./update.js";
 import { version } from "./version.js";
 
@@ -50,6 +51,7 @@ Usage:
   cn doctor [<tool>]                          Check installs, key, and API route
   cn update [--check] [--force]               Update cn and refresh configured tools
   cn refresh                                  Refresh configured tools with the latest models
+  cn changelog [--since <version>]            Show what changed in each release
   cn --version
 `;
 
@@ -290,6 +292,15 @@ async function dispatch(argv: string[], env: Environment) {
         { check: Boolean(flags.check), force: Boolean(flags.force) },
         env,
       );
+    }
+    case "changelog": {
+      const { flags } = parseFlags(rest, { values: ["since"] });
+      const text = readChangelog();
+      if (!text) throw new CnError("This build has no changelog.");
+      const since = typeof flags.since === "string" ? flags.since : undefined;
+      const notes = changesSince(text, since);
+      console.log(notes || `Nothing new since ${since}.`);
+      return 0;
     }
     case "refresh":
       return refreshConfiguredTools(env);

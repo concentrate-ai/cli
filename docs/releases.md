@@ -6,7 +6,10 @@ checksum before installing, so no website hosting is needed.
 
 ## Cut a release
 
-1. Set `version` in `package.json` (and `package-lock.json`) and merge to `main`.
+1. Set `version` in `package.json` (and `package-lock.json`), add a `## <version>`
+   section to `CHANGELOG.md` with a few short bullets, and merge to `main`. The
+   section becomes the GitHub release notes and what `cn update` prints; the
+   release build fails without it.
 2. Check locally:
 
    ```sh

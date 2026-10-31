@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const pkg = JSON.parse(
@@ -22,6 +22,7 @@ try {
     "install.sh",
     "README.md",
     "LICENSE",
+    "CHANGELOG.md",
     "docs",
   ])
     fs.cpSync(path.join(root, file), path.join(temporary, file), {
@@ -42,6 +43,7 @@ try {
       "install.sh",
       "README.md",
       "LICENSE",
+      "CHANGELOG.md",
       "docs",
     ],
     { env: { ...process.env, COPYFILE_DISABLE: "1" } },
@@ -54,6 +56,15 @@ try {
     path.join(root, "install.sh"),
     path.join(output, "install.sh"),
   );
+  // Release notes are this version's CHANGELOG.md section.
+  const { changelogSections } = await import(
+    pathToFileURL(path.join(root, "dist", "lib", "changelog.js")).href
+  );
+  const notes = changelogSections(
+    fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8"),
+  ).find((section) => section.version === pkg.version);
+  if (!notes) throw new Error(`CHANGELOG.md has no section for ${pkg.version}`);
+  fs.writeFileSync(path.join(output, "NOTES.md"), notes.body + "\n");
   console.log(`Prepared ${pkg.version}: ${archive}`);
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });

@@ -34,3 +34,19 @@ test("refreshing with nothing configured does nothing", async () => {
   const env = { CN_CONFIG_HOME: config, HOME: config };
   assert.equal(await refreshConfiguredTools(env), 0);
 });
+
+test("the changelog lists releases newer than a given version", async () => {
+  const { changesSince, changelogSections, readChangelog } =
+    await import("../dist/lib/changelog.js");
+  const text =
+    "# Changelog\n\n## 0.2.0\n\n- b\n\n## 0.1.1\n\n- a\n\n## 0.1.0\n\n- first\n";
+  assert.deepEqual(
+    changelogSections(text).map((s) => s.version),
+    ["0.2.0", "0.1.1", "0.1.0"],
+  );
+  assert.equal(changesSince(text, "0.1.0"), "0.2.0\n- b\n\n0.1.1\n- a");
+  assert.equal(changesSince(text, "0.2.0"), "");
+  // The shipped changelog has a section for the current version or newer.
+  const shipped = changelogSections(readChangelog());
+  assert.ok(shipped.some((s) => !isNewer(version(), s.version)));
+});
