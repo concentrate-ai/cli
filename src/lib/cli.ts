@@ -23,6 +23,7 @@ import { closePrompts } from "./prompt.js";
 import { needsSetup, readStoredKey } from "./settings.js";
 import { ledger } from "./ui/layout.js";
 import { interactive } from "./ui/widgets.js";
+import { offerUpdate, refreshConfiguredTools, runUpdate } from "./update.js";
 import { version } from "./version.js";
 
 const HELP = `cn - Concentrate AI: one key for every coding agent (beta)
@@ -47,6 +48,8 @@ Usage:
   cn model [<tool> [<model-id>]]              Show or change default models
   cn models [<tool>] [--search <text>] [--refresh] [--limit <n>]
   cn doctor [<tool>]                          Check installs, key, and API route
+  cn update [--check] [--force]               Update cn and refresh configured tools
+  cn refresh                                  Refresh configured tools with the latest models
   cn --version
 `;
 
@@ -154,7 +157,10 @@ async function dispatch(argv: string[], env: Environment) {
     process.stdout.write(key + "\n");
     return 0;
   }
-  if (!command && interactive(env)) return runLauncher(env);
+  if (!command && interactive(env)) {
+    if (await offerUpdate(env)) return 0;
+    return runLauncher(env);
+  }
   if (
     !command ||
     command === "help" ||
@@ -169,6 +175,7 @@ async function dispatch(argv: string[], env: Environment) {
     return 0;
   }
   if (isHarness(command)) {
+    if (await offerUpdate(env)) return 0;
     const adapter = getHarness(command);
     // A missing tool is reported by launch() without making anyone set up first.
     if (
@@ -277,6 +284,15 @@ async function dispatch(argv: string[], env: Environment) {
         env,
       );
     }
+    case "update": {
+      const { flags } = parseFlags(rest, { booleans: ["check", "force"] });
+      return runUpdate(
+        { check: Boolean(flags.check), force: Boolean(flags.force) },
+        env,
+      );
+    }
+    case "refresh":
+      return refreshConfiguredTools(env);
     case "doctor":
       return runDoctor(
         { target: toolArg(parseFlags(rest).positionals[0]) },

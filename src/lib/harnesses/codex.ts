@@ -1,7 +1,7 @@
 import {
   codexConfigArguments,
   codexHeaderConfig,
-  codexProviderUsesHelper,
+  codexProviderHasCredential,
 } from "../app-headers.js";
 import { record } from "../validation.js";
 import type { Harness, Environment } from "../types.js";
@@ -118,7 +118,7 @@ const adapter: Harness = {
       `model_providers.concentrate.base_url="${API_ROOT}/v1"`,
       // A saved credential helper (added for plain `codex resume`) already
       // supplies the key, and Codex refuses both on one provider.
-      ...(codexProviderUsesHelper(env)
+      ...(codexProviderHasCredential(env)
         ? []
         : ['model_providers.concentrate.env_key="CONCENTRATE_API_KEY"']),
       'model_providers.concentrate.wire_api="responses"',

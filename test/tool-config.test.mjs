@@ -9,6 +9,7 @@ import {
   codexProviderPresent,
   configureCodexProvider,
   configureTool,
+  refreshConfiguredKey,
   resetTool,
   toolConfigured,
   toolConfigPaths,
@@ -19,6 +20,9 @@ import {
   writeKey,
   writePreferences,
 } from "../dist/lib/settings.js";
+import { applyNativeSetup } from "../dist/lib/native-config-store.js";
+import { runLogout } from "../dist/lib/commands.js";
+import { refreshConfiguredTools } from "../dist/lib/update.js";
 import { fakeTool, tempDir, runCn } from "./helpers.mjs";
 
 const models = ["gpt-small", "gpt-large"].map((id, index) =>
@@ -71,7 +75,7 @@ function fixture() {
     env,
   );
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
-    version: 3,
+    version: 4,
     fetched_at: Date.now(),
     models,
   });
@@ -99,12 +103,43 @@ for (const id of ["claude", "codex", "opencode", "pi"]) {
       false,
       "Must not change shell startup files",
     );
-    assert.equal(
-      first.includes("sk-native-test"),
-      false,
-      "Never put keys in model settings",
-    );
-    if (id !== "opencode") {
+    if (id !== "codex")
+      assert.equal(
+        first.includes("sk-native-test"),
+        false,
+        "Never put keys in model settings",
+      );
+    if (id === "codex") {
+      const bearer = () =>
+        parseConfig(fs.readFileSync(files.settings, "utf8"), "toml")
+          .model_providers.concentrate.experimental_bearer_token;
+      assert.equal(bearer(), "sk-native-test");
+      assert.equal(fs.existsSync(files.helper), false, "Codex needs no helper");
+      writeKey("sk-rotated", env);
+      refreshConfiguredKey(env);
+      assert.equal(bearer(), "sk-rotated");
+      assert.equal(
+        fs.statSync(files.settings).mode & 0o077,
+        0,
+        "Codex's key file must be private",
+      );
+    }
+    if (id === "pi") {
+      const apiKey = () =>
+        JSON.parse(fs.readFileSync(files.catalog, "utf8")).providers.concentrate
+          .apiKey;
+      assert.equal(apiKey(), "sk-native-test");
+      assert.equal(fs.existsSync(files.helper), false, "Pi needs no helper");
+      writeKey("sk-rotated", env);
+      refreshConfiguredKey(env);
+      assert.equal(apiKey(), "sk-rotated");
+      assert.equal(
+        fs.statSync(files.catalog).mode & 0o077,
+        0,
+        "Pi's key file must be private",
+      );
+    }
+    if (id === "claude") {
       const helper = spawnSync(files.helper, [], {
         env: { PATH: path.dirname(process.execPath) },
         encoding: "utf8",
@@ -397,7 +432,11 @@ test("codex: adding only the provider keeps the default provider, model, and com
   assert.equal(doc.model_provider, undefined);
   assert.equal(doc.model_catalog_json, undefined);
   assert.equal(doc.model_providers.concentrate.wire_api, "responses");
-  assert.ok(doc.model_providers.concentrate.auth.command);
+  assert.equal(
+    doc.model_providers.concentrate.experimental_bearer_token,
+    "sk-native-test",
+  );
+  assert.equal(doc.model_providers.concentrate.auth, undefined);
   assert.match(fs.readFileSync(settings, "utf8"), /# my notes/);
   assert.equal(codexProviderPresent(env), true);
   assert.equal(toolConfigured("codex", env), true);
@@ -415,4 +454,83 @@ test("codex: the provider-only setup needs a saved key and is not offered when t
   fs.mkdirSync(path.dirname(settings), { recursive: true });
   fs.writeFileSync(settings, "not = [valid toml");
   assert.equal(codexProviderPresent(env), true);
+});
+
+test("logout removes the key copies that Pi and Codex keep in their own config", async () => {
+  const env = fixture();
+  await configureTool("pi", env);
+  await configureTool("codex", env);
+  const pi = toolConfigPaths("pi", env).catalog;
+  const codex = toolConfigPaths("codex", env).settings;
+  assert.match(fs.readFileSync(pi, "utf8"), /sk-native-test/);
+  assert.match(fs.readFileSync(codex, "utf8"), /sk-native-test/);
+  const log = console.log;
+  console.log = () => {};
+  try {
+    runLogout(env);
+  } finally {
+    console.log = log;
+  }
+  for (const file of [pi, codex])
+    assert.equal(
+      fs.existsSync(file) &&
+        fs.readFileSync(file, "utf8").includes("sk-native-test"),
+      false,
+      `${file} still holds the key after logout`,
+    );
+});
+
+test("a key change leaves a Codex setup from an older cn (helper based) loadable", () => {
+  const env = fixture();
+  const { settings, helper } = toolConfigPaths("codex", env);
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  // The shape v0.1.0 wrote: the provider asks a helper for the key.
+  applyNativeSetup(
+    path.join(env.CN_CONFIG_HOME, "tool-setups", "codex", "restore.json"),
+    [
+      {
+        file: settings,
+        format: "toml",
+        changes: [
+          {
+            key: ["model_providers", "concentrate"],
+            value: {
+              name: "Concentrate AI",
+              base_url: "https://api.concentrate.ai/v1",
+              wire_api: "responses",
+              auth: { command: helper, args: [], timeout_ms: 10000 },
+            },
+          },
+        ],
+      },
+    ],
+  );
+  writeKey("sk-rotated", env);
+  refreshConfiguredKey(env);
+  const provider = parseConfig(fs.readFileSync(settings, "utf8"), "toml")
+    .model_providers.concentrate;
+  assert.equal(provider.experimental_bearer_token, undefined);
+  assert.equal(provider.auth.command, helper);
+});
+
+test("refreshing a provider-only Codex setup keeps Codex's own default provider", async () => {
+  const env = fixture();
+  const { settings } = toolConfigPaths("codex", env);
+  fs.mkdirSync(path.dirname(settings), { recursive: true });
+  fs.writeFileSync(settings, 'model = "gpt-6-sol"\n');
+  configureCodexProvider(env);
+  const log = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(await refreshConfiguredTools(env), 0);
+  } finally {
+    console.log = log;
+  }
+  const doc = parseConfig(fs.readFileSync(settings, "utf8"), "toml");
+  assert.equal(doc.model_provider, undefined);
+  assert.equal(doc.model, "gpt-6-sol");
+  assert.equal(
+    doc.model_providers.concentrate.experimental_bearer_token,
+    "sk-native-test",
+  );
 });

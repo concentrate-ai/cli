@@ -36,12 +36,18 @@ import {
   piConfig,
   writeCodexCatalog,
 } from "./pickers.js";
-import { configDir, readPreferences, readStoredKey } from "./settings.js";
+import {
+  configDir,
+  readJson,
+  readPreferences,
+  readStoredKey,
+} from "./settings.js";
 import {
   applyNativeSetup,
   hasNativeSetup,
   resetNativeSetup,
   refreshNativeCredential,
+  refreshNativeValue,
   withSetupLock,
   type ConfigPlan,
 } from "./native-config-store.js";
@@ -129,17 +135,12 @@ function helperScript(env: Environment) {
   return `#!/bin/sh\n# Concentrate native configuration credential helper\nexec ${quote(process.execPath)} ${quote(fileURLToPath(new URL("../bin/cn.js", import.meta.url)))} --credential-helper ${quote(configDir(env))}\n`;
 }
 
-const codexProviderTable = (helper: string, env: Environment) => ({
+const codexProviderTable = (key: string, env: Environment) => ({
   name: "Concentrate AI",
   base_url: `${API_ROOT}/v1`,
   wire_api: "responses",
   ...codexHeaderConfig("concentrate", env),
-  auth: {
-    command: helper,
-    args: [],
-    timeout_ms: 10000,
-    refresh_interval_ms: 300000,
-  },
+  experimental_bearer_token: key,
 });
 
 function jsonPlan(file: string, entries: [string[], unknown][]): ConfigPlan {
@@ -185,7 +186,8 @@ export async function configureTool(
     );
   const files = toolConfigPaths(id, env);
   const plans: ConfigPlan[] = [];
-  if (id !== "opencode")
+  // Only Claude Code still asks a helper for the key; the others keep it in their own config.
+  if (id === "claude")
     plans.push({
       file: files.helper,
       format: "text",
@@ -250,10 +252,7 @@ export async function configureTool(
     ).providers.concentrate;
     plans.push(
       jsonPlan(files.catalog, [
-        [
-          ["providers", "concentrate"],
-          { ...provider, apiKey: `!${quote(files.helper)}` },
-        ],
+        [["providers", "concentrate"], { ...provider, apiKey: key }],
       ]),
     );
   } else if (id === "opencode") {
@@ -333,7 +332,7 @@ export async function configureTool(
         { key: ["model_catalog_json"], value: files.catalog },
         {
           key: ["model_providers", "concentrate"],
-          value: codexProviderTable(files.helper, env),
+          value: codexProviderTable(key, env),
         },
       ],
     });
@@ -361,30 +360,52 @@ export function codexProviderPresent(env: Environment = process.env) {
 }
 
 export function configureCodexProvider(env: Environment = process.env) {
-  if (!readStoredKey(env))
-    throw new CnError("Save your key with cn key first.");
+  const key = readStoredKey(env);
+  if (!key) throw new CnError("Save your key with cn key first.");
   const files = toolConfigPaths("codex", env);
   withSetupLock(toolSetupDir("codex", env), () =>
     applyNativeSetup(receiptFile("codex", env), [
-      {
-        file: files.helper,
-        format: "text",
-        mode: 0o700,
-        changes: [{ key: ["content"], value: helperScript(env) }],
-      },
       {
         file: files.settings,
         format: "toml",
         changes: [
           {
             key: ["model_providers", "concentrate"],
-            value: codexProviderTable(files.helper, env),
+            value: codexProviderTable(key, env),
           },
         ],
       },
     ]),
   );
   return files.settings;
+}
+
+// True when Codex only has the Concentrate provider added (for plain resume),
+// not the full setup that makes Concentrate its default.
+function codexProviderOnly(env: Environment) {
+  try {
+    const saved = readJson(receiptFile("codex", env));
+    return (Array.isArray(saved.files) ? saved.files : []).every(
+      (file: unknown) =>
+        !(record(file).changes as unknown[] | undefined)?.some(
+          (change) =>
+            JSON.stringify(record(change).key) === '["model_provider"]',
+        ),
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Brings an existing setup up to date (models, prices, key format) without
+// widening it: a provider-only Codex setup stays provider-only.
+export async function reconfigureTool(
+  id: ConfigurableToolId,
+  env: Environment = process.env,
+) {
+  if (id === "codex" && codexProviderOnly(env))
+    return configureCodexProvider(env);
+  return configureTool(id, env);
 }
 
 export function resetTool(
@@ -427,6 +448,42 @@ export function refreshConfiguredKey(env: Environment = process.env) {
       problems.push(
         new CnError(
           "The key was saved, but OpenCode's credential was edited externally. Run cn configure opencode to review its integration.",
+        ),
+      );
+  }
+  if (saved && toolConfigured("codex", env)) {
+    const files = toolConfigPaths("codex", env);
+    const refreshed = withSetupLock(toolSetupDir("codex", env), () =>
+      refreshNativeValue(
+        receiptFile("codex", env),
+        Object.values(files),
+        files.settings,
+        ["model_providers", "concentrate", "experimental_bearer_token"],
+        saved,
+      ),
+    );
+    if (!refreshed)
+      problems.push(
+        new CnError(
+          "The key was saved, but Codex's key could not be refreshed. Run cn configure codex to update it.",
+        ),
+      );
+  }
+  if (saved && toolConfigured("pi", env)) {
+    const files = toolConfigPaths("pi", env);
+    const refreshed = withSetupLock(toolSetupDir("pi", env), () =>
+      refreshNativeValue(
+        receiptFile("pi", env),
+        Object.values(files),
+        files.catalog,
+        ["providers", "concentrate", "apiKey"],
+        saved,
+      ),
+    );
+    if (!refreshed)
+      problems.push(
+        new CnError(
+          "The key was saved, but Pi's key could not be refreshed. Run cn configure pi to update it.",
         ),
       );
   }

@@ -8,15 +8,15 @@ import path from "node:path";
 import { API_ROOT } from "../catalog.js";
 import { piConfig } from "../pickers.js";
 
-const RESOURCE_DIRS = [
-  "extensions",
-  "skills",
-  "prompt-templates",
-  "prompt_templates",
-  "themes",
-  "packages",
-  "bin",
-];
+// Written by cn for each run, or deliberately kept out of the temporary profile.
+// Everything else in the Pi agent dir (extensions, skills, MCP config, caches)
+// is linked through so the profile behaves like the user's own.
+const OWNED = new Set([
+  "settings.json",
+  "models.json",
+  "auth.json",
+  "sessions",
+]);
 
 function readObject(file: string): Record<string, unknown> {
   try {
@@ -59,10 +59,18 @@ function preparePiDir(
       ).providers,
     },
   });
-  for (const name of RESOURCE_DIRS) {
-    const original = path.join(source, name);
-    if (fs.existsSync(original) && fs.statSync(original).isDirectory()) {
-      fs.symlinkSync(original, path.join(directory, name), "dir");
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(source);
+  } catch {
+    // No Pi directory yet; there is nothing to carry over.
+  }
+  for (const name of names) {
+    if (OWNED.has(name)) continue;
+    try {
+      fs.symlinkSync(path.join(source, name), path.join(directory, name));
+    } catch {
+      // A single unlinkable entry should not stop Pi from launching.
     }
   }
   // Pi owns its normal project sessions. The rest of this profile stays

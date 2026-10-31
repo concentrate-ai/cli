@@ -65,7 +65,7 @@ test("source install produces a self-contained CLI and launches all four adapter
     }),
   );
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
-    version: 3,
+    version: 4,
     fetchedAt: Date.now() / 1000,
     models,
   });

@@ -226,7 +226,7 @@ test("Cursor CLI Configure/Reset and global Reset/Logout include desktop credent
     const f = fixture();
     writeKey("sk-saved", f.env);
     writeJson(path.join(f.env.CN_CONFIG_HOME, "catalog.json"), {
-      version: 3,
+      version: 4,
       fetched_at: Date.now(),
       models,
     });

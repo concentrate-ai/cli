@@ -27,9 +27,24 @@ curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh 
 cn
 ```
 
-The installer checks a SHA-256 checksum and puts `cn` in `~/.local/bin`. Run the
-same command again to update. Prefer to build it yourself? Clone this repository,
-then run `npm ci` and `./install.sh`.
+The installer checks a SHA-256 checksum and puts `cn` in `~/.local/bin`. Prefer
+to build it yourself? Clone this repository, then run `npm ci` and `./install.sh`.
+
+## Updating
+
+When a new version of `cn` is out, `cn` asks once when you start it, with
+**Update now**, **Remind me tomorrow**, or **Skip this version**. You can also
+update any time:
+
+```sh
+cn update           # Update cn, then refresh the tools you configured
+cn update --check   # Only check for a newer version
+```
+
+New models don't need an update. They come from the live Concentrate catalog and
+show up in `cn <tool>` within an hour. Tools you set up with `cn configure` keep a
+copy of the model list, so run `cn refresh` (or `cn update`) to bring them up to
+date. Set `CN_NO_UPDATE_CHECK=1` to turn off the update prompt.
 
 ## Get started
 
@@ -65,6 +80,13 @@ while you run through `cn`.
   switch models inside the session.
 - Claude.ai connectors belong to a subscription login, so they are turned off
   while you run through `cn`.
+- Your MCP servers work as usual. Servers you add or approve during a `cn claude`
+  session are saved to your normal Claude Code settings.
+- MCP servers that sign in through a browser need one sign-in inside `cn claude`,
+  separate from plain `claude`. After that they stay signed in.
+- Claude Code's cost estimates (`/cost`, the status line) use its own price list,
+  so they can be wrong for non-Claude models. Your Concentrate dashboard has the
+  actual charges.
 
 ## Codex
 
@@ -80,6 +102,8 @@ while you run through `cn`.
 
 - Both work with the models in the Concentrate catalog. OpenCode v1 and v2 are
   supported.
+- Cost estimates in both tools use Concentrate's prices.
+- `cn pi` keeps your Pi extensions, skills, and MCP configuration.
 - `cn models <tool>` shows what each tool can use, and `--search` filters the list.
 
 ## Cursor desktop
@@ -126,27 +150,38 @@ that fits the conversation's size.
 `cn reset <tool>` puts your earlier settings back and keeps any changes you made
 since. Save your key first with `cn key`.
 
+- Codex, OpenCode, and Pi keep a copy of your key in their own settings, readable
+  only by you. Claude Code gets it from `cn` when it starts.
+- `cn key` updates those copies, and `cn logout` removes them.
+- Run `cn refresh` to pick up new models and prices.
+- Set up a tool with `cn` 0.1.0? Run `cn refresh` once after updating.
+
 ## Your key and privacy
 
 - Your key is stored in `~/.config/concentrate-cli/` with access limited to your
   user. Use `CN_CONFIG_HOME` to choose another folder.
 - The key is never passed on the command line, where other programs could read it.
-- `cn logout` removes the saved key. `cn reset` clears everything `cn` saved.
+- If you use `cn configure`, Codex, OpenCode, and Pi also keep a private copy of
+  the key in their own settings.
+- `cn logout` removes the saved key and those copies. `cn reset` clears everything
+  `cn` saved.
 
 ## Commands
 
-| Command               | What it does                                  |
-| --------------------- | --------------------------------------------- |
-| `cn`                  | Open the launcher                             |
-| `cn <tool>`           | Start a tool through Concentrate              |
-| `cn configure <tool>` | Use Concentrate in a tool's normal command    |
-| `cn reset <tool>`     | Switch a tool back                            |
-| `cn model [<tool>]`   | Show or change default models                 |
-| `cn models [<tool>]`  | Browse available models                       |
-| `cn key`              | Replace your saved API key                    |
-| `cn logout`           | Remove your saved API key                     |
-| `cn doctor [<tool>]`  | Check your setup, or test a tool's live route |
-| `cn settings`         | Open settings                                 |
+| Command               | What it does                                    |
+| --------------------- | ----------------------------------------------- |
+| `cn`                  | Open the launcher                               |
+| `cn <tool>`           | Start a tool through Concentrate                |
+| `cn configure <tool>` | Use Concentrate in a tool's normal command      |
+| `cn reset <tool>`     | Switch a tool back                              |
+| `cn model [<tool>]`   | Show or change default models                   |
+| `cn models [<tool>]`  | Browse available models                         |
+| `cn key`              | Replace your saved API key                      |
+| `cn logout`           | Remove your saved API key                       |
+| `cn doctor [<tool>]`  | Check your setup, or test a tool's live route   |
+| `cn update`           | Update cn and refresh configured tools          |
+| `cn refresh`          | Refresh configured tools with the latest models |
+| `cn settings`         | Open settings                                   |
 
 ## Help
 

@@ -61,13 +61,14 @@ export function codexConfigArguments(forwarded: string[]) {
   return { overrides, args };
 }
 
-// Codex rejects a provider that has both a credential helper and an env_key.
-export function codexProviderUsesHelper(env: Environment) {
+// Codex rejects a provider that has both a saved credential and an env_key.
+export function codexProviderHasCredential(env: Environment) {
   const directory =
     env.CODEX_HOME || path.join(env.HOME || os.homedir(), ".codex");
   try {
     const config = configDocument(path.join(directory, "config.toml"), "toml");
-    return Boolean(record(record(config.model_providers).concentrate).auth);
+    const provider = record(record(config.model_providers).concentrate);
+    return Boolean(provider.auth || provider.experimental_bearer_token);
   } catch {
     return false;
   }

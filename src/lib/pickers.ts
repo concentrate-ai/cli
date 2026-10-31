@@ -108,6 +108,18 @@ export function opencodeConfig(
           entry.id,
           {
             ...common,
+            ...(entry.cost
+              ? {
+                  cost: {
+                    input: entry.cost.input,
+                    output: entry.cost.output,
+                    cache: {
+                      read: entry.cost.cacheRead,
+                      write: entry.cost.cacheWrite,
+                    },
+                  },
+                }
+              : {}),
             // Explicit variants also cover v2 releases predating capabilities.reasoning.
             ...(efforts
               ? {
@@ -144,6 +156,16 @@ export function opencodeConfig(
         entry.id,
         {
           ...common,
+          ...(entry.cost
+            ? {
+                cost: {
+                  input: entry.cost.input,
+                  output: entry.cost.output,
+                  cache_read: entry.cost.cacheRead,
+                  cache_write: entry.cost.cacheWrite,
+                },
+              }
+            : {}),
           modalities: {
             input: entry.image ? ["text", "image"] : ["text"],
             output: ["text"],
@@ -215,6 +237,7 @@ export function piConfig(
     };
     if (positiveTokens(entry.context)) data.contextWindow = entry.context;
     if (positiveTokens(entry.output)) data.maxTokens = entry.output;
+    if (entry.cost) data.cost = entry.cost;
     const efforts = modelEfforts(entry);
     if (data.reasoning && efforts) {
       data.thinkingLevelMap = Object.fromEntries(

@@ -5,6 +5,13 @@ export type ConfigurableToolId = HarnessId | "cursor";
 export type Preferences = Record<HarnessId, string>;
 export type Effort =
   "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+// US dollars per million tokens.
+export interface ModelCost {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
 export interface Model {
   id: string;
   name: string;
@@ -17,6 +24,7 @@ export interface Model {
   reasoning: boolean;
   reasoningSupport: boolean | null;
   efforts: Effort[] | null;
+  cost?: ModelCost | null;
   variants?: Model[];
 }
 export interface PrepareOptions {

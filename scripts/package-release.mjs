@@ -21,6 +21,7 @@ try {
     "package.json",
     "install.sh",
     "README.md",
+    "LICENSE",
     "docs",
   ])
     fs.cpSync(path.join(root, file), path.join(temporary, file), {
@@ -40,6 +41,7 @@ try {
       "package.json",
       "install.sh",
       "README.md",
+      "LICENSE",
       "docs",
     ],
     { env: { ...process.env, COPYFILE_DISABLE: "1" } },

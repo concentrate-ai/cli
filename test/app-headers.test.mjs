@@ -9,6 +9,7 @@ import {
 } from "../dist/lib/app-headers.js";
 import { tempDir } from "./helpers.mjs";
 import codex from "../dist/lib/harnesses/codex.js";
+import claude from "../dist/lib/harnesses/claude.js";
 import pi from "../dist/lib/harnesses/pi.js";
 import opencode from "../dist/lib/harnesses/opencode.js";
 
@@ -143,4 +144,66 @@ test("Codex keeps subcommand config overrides beside its connection options", as
   );
   assert.deepEqual(prepared.args.slice(subcommand), ["exec", "Reply OK"]);
   prepared.cleanup();
+});
+
+test("Pi keeps the user's MCP config and other files but never their login", async () => {
+  const root = tempDir("cn-pi-carry-");
+  fs.writeFileSync(path.join(root, "mcp.json"), '{"mcpServers":{"a":{}}}');
+  fs.writeFileSync(path.join(root, "auth.json"), '{"token":"secret"}');
+  fs.mkdirSync(path.join(root, "extensions"));
+  const launched = await pi.prepare({
+    executable: process.execPath,
+    model: "test",
+    key: "sk-test",
+    available: [],
+    forwarded: [],
+    env: { HOME: root, PI_CODING_AGENT_DIR: root, CN_CONFIG_HOME: root },
+  });
+  try {
+    const dir = launched.env.PI_CODING_AGENT_DIR;
+    assert.equal(
+      fs.readFileSync(path.join(dir, "mcp.json"), "utf8"),
+      '{"mcpServers":{"a":{}}}',
+    );
+    assert.ok(fs.existsSync(path.join(dir, "extensions")));
+    assert.equal(fs.existsSync(path.join(dir, "auth.json")), false);
+  } finally {
+    launched.cleanup();
+  }
+});
+
+test("Claude keeps MCP sign-ins in one fixed place across runs", async () => {
+  const root = tempDir("cn-claude-mcp-auth-");
+  const env = {
+    HOME: root,
+    CLAUDE_CONFIG_DIR: path.join(root, "claude"),
+    CN_CONFIG_HOME: path.join(root, "cn"),
+  };
+  const input = {
+    executable: process.execPath,
+    model: "claude-sonnet-4-5",
+    key: "sk-test",
+    available: [],
+    forwarded: [],
+    env,
+  };
+  const first = await claude.prepare(input);
+  const second = await claude.prepare(input);
+  try {
+    assert.notEqual(first.env.CLAUDE_CONFIG_DIR, second.env.CLAUDE_CONFIG_DIR);
+    assert.equal(
+      first.env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+      second.env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+    );
+    assert.equal(
+      first.env.CLAUDE_SECURESTORAGE_CONFIG_DIR,
+      path.join(root, "cn", "claude-mcp-auth"),
+    );
+    assert.ok(
+      fs.statSync(first.env.CLAUDE_SECURESTORAGE_CONFIG_DIR).isDirectory(),
+    );
+  } finally {
+    first.cleanup();
+    second.cleanup();
+  }
 });

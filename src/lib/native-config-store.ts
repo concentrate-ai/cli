@@ -437,6 +437,64 @@ export function resetNativeSetup(state: string, allowed: string[]) {
   return { reset: true, preserved };
 }
 
+// Rotates one value cn wrote inside a structured config file, such as Pi's saved key, unless
+// the user has edited that value since. Keeps the first restore snapshot.
+export function refreshNativeValue(
+  state: string,
+  allowed: string[],
+  file: string,
+  key: string[],
+  value: unknown,
+) {
+  const saved = receipt(state, allowed);
+  if (!saved?.active) return false;
+  const snapshot = saved.files.find((entry) => entry.file === file);
+  // The value may sit inside a larger object that Configure recorded as one change.
+  const change = snapshot?.changes.find(
+    (entry) =>
+      entry.key.length <= key.length &&
+      entry.key.every((part, i) => part === key[i]),
+  );
+  if (!snapshot || !change || snapshot.format === "text") return false;
+  const rest = key.slice(change.key.length);
+  const current = readConfigFile(file);
+  if (current === null) return false;
+  const ours = get(parseConfig(snapshot.written, snapshot.format), key);
+  // A setup from an older cn has no copy of the key here (it reads the saved
+  // key through a helper), so there is nothing to rotate. Adding one beside
+  // that helper can make the tool reject its whole config.
+  if (ours === undefined) return true;
+  if (!isDeepStrictEqual(get(parseConfig(current, snapshot.format), key), ours))
+    return false;
+  const previousValue = change.value;
+  let nextValue: unknown = value;
+  if (rest.length) {
+    if (!isRecord(change.value)) return false;
+    const copy = structuredClone(change.value);
+    let target = copy;
+    for (const part of rest.slice(0, -1)) {
+      if (!isRecord(target[part])) return false;
+      target = target[part] as Record<string, unknown>;
+    }
+    target[rest[rest.length - 1]] = value;
+    nextValue = copy;
+  }
+  const next = setConfig(current, snapshot.format, key, value);
+  const previous = snapshot.written;
+  snapshot.written = setConfig(snapshot.written, snapshot.format, key, value);
+  change.value = nextValue;
+  replaceFile(file, next, snapshot.mode);
+  try {
+    writeJson(state, saved);
+  } catch (error) {
+    snapshot.written = previous;
+    change.value = previousValue;
+    replaceFile(file, current, snapshot.mode);
+    throw error;
+  }
+  return true;
+}
+
 // Native OpenCode supports a credential file rather than a command-backed resolver.
 // Rotate only the credential cn still owns, keeping the first restore snapshot.
 export function refreshNativeCredential(

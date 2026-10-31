@@ -18,7 +18,7 @@ fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 100, 0, 0))
 with tempfile.TemporaryDirectory(prefix='cn-navigation-') as directory:
     env = {**os.environ, 'CN_CONFIG_HOME': directory, 'CN_OFFLINE': '1',
            'CN_NO_MOTION': '1', 'NO_COLOR': '1', 'TERM': 'xterm-256color',
-           'CONCENTRATE_API_KEY': 'sk-navigation-test', 'PATH': directory}
+           'CN_NO_UPDATE_CHECK': '1', 'CONCENTRATE_API_KEY': 'sk-navigation-test', 'PATH': directory}
     child = subprocess.Popen([sys.argv[1], sys.argv[2]], stdin=slave, stdout=slave,
                              stderr=slave, env=env)
     os.close(slave)
@@ -158,7 +158,7 @@ for termination in ('ctrl-c', 'sigterm'):
     with tempfile.TemporaryDirectory(prefix='cn-exit-') as directory:
         env = {**os.environ, 'CN_CONFIG_HOME': directory, 'CN_OFFLINE': '1',
                'CN_NO_MOTION': '1', 'NO_COLOR': '1', 'TERM': 'xterm-256color',
-               'CONCENTRATE_API_KEY': 'sk-exit-test'}
+               'CN_NO_UPDATE_CHECK': '1', 'CONCENTRATE_API_KEY': 'sk-exit-test'}
         child = subprocess.Popen([sys.argv[1], sys.argv[2]], stdin=slave, stdout=slave, stderr=slave, env=env)
         os.close(slave)
         try:

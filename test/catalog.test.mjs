@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, test } from "node:test";
 
 import {
@@ -8,6 +10,7 @@ import {
   summarize,
   validateKey,
 } from "../dist/lib/catalog.js";
+import { opencodeConfig, piConfig } from "../dist/lib/pickers.js";
 import { tempDir } from "./helpers.mjs";
 
 const realFetch = globalThis.fetch;
@@ -165,7 +168,7 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 3,
+    version: 4,
     fetchedAt: Date.now() / 1000,
     models: [
       null,
@@ -265,7 +268,7 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 3,
+    version: 4,
     fetchedAt: 9e12,
     models: [{ id: "stale-model" }],
   });
@@ -276,4 +279,79 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
     result.models.map((m) => m.id),
     ["live-model"],
   );
+});
+
+test("catalog prices become dollars per million tokens for Pi", () => {
+  const entry = summarize({
+    id: "m",
+    name: "M",
+    providers: {
+      p: {
+        provider_slug: "p",
+        pricing: [
+          {
+            tokens: {
+              input: { price: { USD: 2 }, units: 1000000 },
+              output: { price: { USD: 5 }, units: 500000 },
+              cache: {
+                read: { price: { USD: 0.1 }, units: 1000000 },
+                write: {
+                  ephemeral_5m_input_tokens: {
+                    price: { USD: 2.5 },
+                    units: 1000000,
+                  },
+                },
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.deepEqual(entry.cost, {
+    input: 2,
+    output: 10,
+    cacheRead: 0.1,
+    cacheWrite: 2.5,
+  });
+  assert.deepEqual(entry.variants[0].cost, entry.cost);
+  const pi = piConfig("https://x", [entry]).providers.concentrate.models[0];
+  assert.deepEqual(pi.cost, entry.cost);
+  const price = { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 };
+  const old = opencodeConfig("https://x", "m", [entry]).provider.concentrate
+    .models.m.cost;
+  assert.deepEqual(old, {
+    input: 2,
+    output: 10,
+    cache_read: 0.1,
+    cache_write: 2.5,
+  });
+  const modern = opencodeConfig("https://x", "m", [entry], { modern: true })
+    .providers.concentrate.models.m.cost;
+  assert.deepEqual(modern, {
+    input: price.input,
+    output: price.output,
+    cache: { read: 0.1, write: 2.5 },
+  });
+  assert.equal(summarize({ id: "n", name: "N" }).cost, null);
+});
+
+test("a cache from before prices is still used offline, but refreshed when online", async () => {
+  const config = tempDir("cn-catalog-v3-");
+  const env = { CN_CONFIG_HOME: config, CN_OFFLINE: "1" };
+  fs.writeFileSync(
+    path.join(config, "catalog.json"),
+    JSON.stringify({
+      version: 3,
+      fetchedAt: Date.now() / 1000,
+      models: [{ id: "old-model", name: "Old" }],
+    }),
+  );
+  const { models, source } = await fetchCatalog({ env });
+  assert.equal(source, "offline cache");
+  assert.deepEqual(
+    models.map((m) => m.id),
+    ["old-model"],
+  );
+  assert.equal(models[0].cost, null);
 });

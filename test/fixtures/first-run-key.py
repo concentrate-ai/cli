@@ -16,6 +16,7 @@ master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 100, 0, 0))
 with tempfile.TemporaryDirectory(prefix='cn-first-run-') as directory:
     env = {k: v for k, v in os.environ.items() if k != 'CONCENTRATE_API_KEY'}
+    env['CN_NO_UPDATE_CHECK'] = '1'
     env.update({'CN_CONFIG_HOME': directory, 'CN_OFFLINE': '1', 'CN_NO_MOTION': '1',
                 'NO_COLOR': '1', 'TERM': 'xterm-256color', 'PATH': directory,
                 'HOME': directory})

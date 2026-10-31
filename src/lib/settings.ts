@@ -219,6 +219,9 @@ const STATE_FILES = [
   "config.json",
   "catalog.json",
   "codex-provider-declined",
+  "claude-mcp-auth",
+  "update-check.json",
+  "update-prompt.json",
 ];
 
 // What `cn reset` would remove. Pi chat history only counts when asked for.

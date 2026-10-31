@@ -78,3 +78,57 @@ test("Claude profile isolates settings while sharing conversation files", () => 
   assert.equal(fs.existsSync(profile.directory), false);
   assert.equal(fs.existsSync(session), true);
 });
+
+test("MCP servers and approvals changed in a session are saved to the real file", () => {
+  const root = tempDir("cn-profile-mcp-");
+  const real = path.join(root, ".claude.json");
+  fs.writeFileSync(
+    real,
+    JSON.stringify({
+      theme: "dark",
+      mcpServers: { keep: { command: "a" }, drop: { command: "b" } },
+      projects: { "/p": { enabledMcpjsonServers: ["x"] } },
+    }),
+  );
+  const profile = prepareClaudeProfile({ HOME: root });
+  try {
+    const copy = path.join(profile.directory, ".claude.json");
+    const doc = JSON.parse(fs.readFileSync(copy, "utf8"));
+    doc.mcpServers.added = { command: "c" };
+    delete doc.mcpServers.drop;
+    doc.projects["/p"].enabledMcpjsonServers = ["x", "y"];
+    doc.theme = "light";
+    fs.writeFileSync(copy, JSON.stringify(doc));
+    // Edited elsewhere while the session ran.
+    const live = JSON.parse(fs.readFileSync(real, "utf8"));
+    live.other = true;
+    fs.writeFileSync(real, JSON.stringify(live));
+    profile.syncBack();
+  } finally {
+    profile.cleanup();
+  }
+  const saved = JSON.parse(fs.readFileSync(real, "utf8"));
+  assert.deepEqual(Object.keys(saved.mcpServers).sort(), ["added", "keep"]);
+  assert.deepEqual(saved.projects["/p"].enabledMcpjsonServers, ["x", "y"]);
+  assert.equal(saved.theme, "dark");
+  assert.equal(saved.other, true);
+});
+
+test("saving MCP changes keeps a symlinked ~/.claude.json a symlink", () => {
+  const root = tempDir("cn-profile-mcp-link-");
+  const real = path.join(root, "dotfiles-claude.json");
+  fs.writeFileSync(real, JSON.stringify({ mcpServers: {} }));
+  fs.symlinkSync(real, path.join(root, ".claude.json"));
+  const profile = prepareClaudeProfile({ HOME: root });
+  try {
+    const copy = path.join(profile.directory, ".claude.json");
+    const doc = JSON.parse(fs.readFileSync(copy, "utf8"));
+    doc.mcpServers.added = { command: "c" };
+    fs.writeFileSync(copy, JSON.stringify(doc));
+    profile.syncBack();
+  } finally {
+    profile.cleanup();
+  }
+  assert.ok(fs.lstatSync(path.join(root, ".claude.json")).isSymbolicLink());
+  assert.ok(JSON.parse(fs.readFileSync(real, "utf8")).mcpServers.added);
+});

@@ -10,7 +10,8 @@ cn --version      # which version you have
 cn doctor         # checks your tools, your key, and the connection
 ```
 
-To update `cn`, run the install command again.
+To update `cn`, run `cn update`. On 0.1.0, which has no `cn update`, run the
+install command again.
 
 ## Install
 
@@ -43,8 +44,13 @@ run `cn key`.
 Run `cn key` and enter your key again. It replaces the damaged file. You can
 also run `chmod 600` on the file named in the message.
 
-**Remove the key from this computer:** `cn logout`. If you also set
+**Remove the key from this computer:** `cn logout`. It also removes the copies
+that `cn configure` gave Codex, OpenCode, and Pi. If you also set
 `CONCENTRATE_API_KEY` in your shell, remove it there too.
+
+**`The key was saved, but <tool>'s key could not be refreshed`**
+You edited that tool's key by hand after `cn configure`, so `cn` left it alone.
+Run `cn configure <tool>` to put the current key back.
 
 ## Claude Code
 
@@ -58,6 +64,14 @@ This needs Claude Code mods to be enabled. Do not start Claude with `--bare` or
 **Claude.ai connectors are disabled**
 They belong to a subscription login, which `cn` does not use. Run plain `claude`
 for them.
+
+**An MCP server asks me to sign in again**
+Browser sign-ins for MCP servers are kept separately for `cn claude` and plain
+`claude`. Sign in once inside `cn claude`; it is remembered after that.
+
+**Cost estimates look wrong for non-Claude models**
+Claude Code estimates cost from its own price list, which only knows Claude
+models. Your Concentrate dashboard shows the actual charges.
 
 ## Codex
 
@@ -83,8 +97,9 @@ to `~/.codex/config.toml` (it offers this the first time you run `cn codex`).
 You can also run `cn configure codex`, which additionally makes Concentrate your
 default. Undo either with `cn reset codex`.
 
-**`provider auth cannot be combined with env_key`**
-You have an older `cn`. Run the install command again to update.
+**`provider auth cannot be combined with env_key`** or **`... with experimental_bearer_token`**
+The Concentrate section of `~/.codex/config.toml` came from an older `cn`. Run
+`cn update` (or the install command), then `cn refresh`.
 
 **Using your ChatGPT subscription and Concentrate**
 Run `codex` for your subscription and `cn codex` for Concentrate. `cn` does not
@@ -106,12 +121,30 @@ OpenCode v1 and v2 are both supported.
 If `settings.json` or `models.json` in Pi's folder is a symbolic link, `cn` does
 not follow it yet. Use a regular file.
 
+**Pi says `Failed to resolve API key ... credential-helper`**
+That setup came from `cn` 0.1.0, which asked a helper script for the key on
+every request. Run `cn update`, then `cn refresh`; Pi then keeps the key itself.
+
+**New models don't show up in a tool I configured**
+`cn configure` saves a copy of the model list. Run `cn refresh` to update it.
+`cn <tool>` always uses the current list.
+
 ## Cursor (work in progress)
 
 - Quit Cursor completely before `cn configure cursor` or `cn reset cursor`.
 - Open Cursor once before configuring, so its settings exist.
 - `sqlite3` is required (it ships with macOS).
 - Tab completions keep using Cursor's own models.
+
+## Updates
+
+**The update prompt is in my way**
+Choose **Skip this version** to stop being asked until a newer version comes out,
+or set `CN_NO_UPDATE_CHECK=1` to turn the prompt off. It never appears in scripts
+or CI.
+
+**`A different cn command already exists at ~/.local/bin/cn`**
+That file was not made by the installer. Move it away and run `cn update` again.
 
 ## Undo and start over
 

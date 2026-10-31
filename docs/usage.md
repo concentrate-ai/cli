@@ -111,7 +111,14 @@ cn configure cursor             # Cursor desktop; quit the app first
 
 Save your key with `cn key` first. Configuration writes to the tool’s own settings;
 it does not replace its executable or change your shell profile. Restart the tool
-afterward. Run Configure again to refresh its saved model catalog.
+afterward. Codex, OpenCode, and Pi keep a private copy of your key in their own
+settings; `cn key` updates it and `cn logout` removes it. Claude Code gets the key
+from `cn` through a small helper.
+
+The saved model list and prices are a snapshot. Run `cn refresh` to update every
+configured tool at once, or Configure again for one tool. `cn update` refreshes
+them too. A Codex setup that only added the Concentrate provider (for plain
+`codex resume`) stays that way when refreshed.
 
 For Cursor desktop, install and open Cursor once, then quit it before Configure or
 Reset. Select models in Cursor afterward. Cursor stores your Concentrate key and
@@ -142,6 +149,8 @@ for differences between permanent configuration and a session launched through `
 | `cn logout`           | Remove the saved API key                                        |
 | `cn doctor`           | Check tool installations and key status                         |
 | `cn doctor <tool>`    | Test a tool's API route with a live request                     |
+| `cn update`           | Update cn, then refresh configured tools (`--check` only looks) |
+| `cn refresh`          | Refresh configured tools with the latest models and prices      |
 | `cn reset`            | Restore configured tools and remove cn’s key, models, and cache |
 | `cn --help`           | Show all commands and options                                   |
 

@@ -1,4 +1,4 @@
-import type { Effort, Environment } from "./types.js";
+import type { Effort, Environment, ModelCost } from "./types.js";
 
 export interface ClaudeSettings {
   hooks?: {
@@ -15,6 +15,14 @@ export interface ClaudeSettings {
 export interface OpenCodeModel {
   name: string;
   limit?: { context?: number; output?: number };
+  cost?:
+    | { input: number; output: number; cache: { read: number; write: number } }
+    | {
+        input: number;
+        output: number;
+        cache_read: number;
+        cache_write: number;
+      };
   capabilities?: {
     tools?: boolean;
     input: string[];
@@ -35,5 +43,6 @@ export interface PiModel {
   maxTokens?: number;
   input: string[];
   reasoning: boolean;
+  cost?: ModelCost;
   thinkingLevelMap?: Record<string, string | null>;
 }

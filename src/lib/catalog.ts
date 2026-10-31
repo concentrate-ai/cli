@@ -1,5 +1,5 @@
 import { EFFORTS } from "./model-metadata.js";
-import type { Environment, HarnessId, Model } from "./types.js";
+import type { Environment, HarnessId, Model, ModelCost } from "./types.js";
 import { isRecord, record, positiveTokens } from "./validation.js";
 import path from "node:path";
 
@@ -78,6 +78,40 @@ const support = (provider: Record<string, unknown>, kind: string) =>
 const effortMap = (provider: Record<string, unknown>) =>
   record(support(provider, "reasoning").effort);
 
+// A provider's token prices, converted to dollars per million tokens.
+function costOf(provider: Record<string, unknown>): ModelCost | null {
+  const list = provider.pricing;
+  const tokens = record(Array.isArray(list) ? record(list[0]).tokens : null);
+  const perMillion = (entry: unknown) => {
+    const { price, units } = record(entry);
+    const usd = record(price).USD;
+    return typeof usd === "number" &&
+      typeof units === "number" &&
+      usd >= 0 &&
+      units > 0
+      ? (usd / units) * 1_000_000
+      : null;
+  };
+  const input = perMillion(tokens.input);
+  const output = perMillion(tokens.output);
+  if (input === null || output === null) return null;
+  const cache = record(tokens.cache);
+  return {
+    input,
+    output,
+    cacheRead: perMillion(cache.read) ?? 0,
+    cacheWrite: perMillion(record(cache.write).ephemeral_5m_input_tokens) ?? 0,
+  };
+}
+
+function savedCost(value: unknown): ModelCost | null {
+  const cost = record(value);
+  const fields = [cost.input, cost.output, cost.cacheRead, cost.cacheWrite];
+  return fields.every((n) => typeof n === "number" && n >= 0)
+    ? (cost as unknown as ModelCost)
+    : null;
+}
+
 function model(fields: Record<string, unknown>): Model {
   const efforts = Array.isArray(fields.efforts) ? fields.efforts : null;
   const id = isModelId(fields.id) ? fields.id : "";
@@ -98,6 +132,7 @@ function model(fields: Record<string, unknown>): Model {
     efforts: efforts
       ? EFFORTS.filter((level) => efforts.includes(level))
       : null,
+    cost: savedCost(fields.cost),
   };
 }
 
@@ -126,6 +161,7 @@ export function summarize(value: unknown): Model | null {
     image: record(capabilities.image_input).supported === true,
     reasoning: record(capabilities.thinking).supported === true,
     reasoningSupport: record(capabilities.thinking).supported,
+    cost: providers.map(costOf).find(Boolean) ?? null,
     efforts:
       providers.length &&
       providers.every((p) => isRecord(support(p, "reasoning").effort))
@@ -151,6 +187,7 @@ export function summarize(value: unknown): Model | null {
         context: p.context_window ?? summary.context,
         output: p.max_output_tokens ?? summary.output,
         image: Object.values(record(support(p, "input").image)).some(Boolean),
+        cost: costOf(p),
         reasoning,
         reasoningSupport: isRecord(support(p, "reasoning").effort)
           ? reasoning
@@ -206,16 +243,18 @@ export async function fetchCatalog({
     cached = {};
   }
   // A cache written by another format version is not trustworthy, online or off.
-  const current = cached.version === 3;
+  // Version 3 differs only by lacking prices, so it is a fallback but never fresh.
+  const current = cached.version === 4;
+  const usable = current || cached.version === 3;
   const saved =
-    current && Array.isArray(cached.models)
+    usable && Array.isArray(cached.models)
       ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
       : null;
   const age =
     Date.now() / 1000 -
     (typeof cached.fetchedAt === "number" ? cached.fetchedAt : 0);
   // A timestamp in the future (clock skew, a hand-edited file) is never fresh.
-  const fresh = saved && age >= 0 && age < CACHE_SECONDS;
+  const fresh = current && saved && age >= 0 && age < CACHE_SECONDS;
   if (!refresh && fresh) return { models: saved, source: "cache" };
   if (env.CN_OFFLINE === "1") {
     if (saved) return { models: saved, source: "offline cache" };
@@ -233,7 +272,7 @@ export async function fetchCatalog({
   }
   // The list is good even when it cannot be saved (read-only or full disk).
   try {
-    writeJson(file, { version: 3, fetchedAt: Date.now() / 1000, models });
+    writeJson(file, { version: 4, fetchedAt: Date.now() / 1000, models });
   } catch {
     /* The next run fetches again. */
   }

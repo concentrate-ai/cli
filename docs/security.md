@@ -17,7 +17,9 @@ Not prevented: the coding agent itself runs commands with that environment, so a
 
 ## Permanent configuration
 
-Claude, Codex, and Pi use command-backed helpers that resolve the saved key at request time. OpenCode references a separate private key file through its native file substitution; `cn key` rotates that file when it is still managed by cn. `cn logout` resets OpenCode’s saved integration.
+Claude uses a command-backed `apiKeyHelper` that resolves the saved key at request time. Codex and Pi hold the key itself in their own config (`experimental_bearer_token` in `~/.codex/config.toml`, `apiKey` in Pi’s `models.json`), written with mode `0600`. OpenCode references a separate private key file through its native file substitution. `cn key` rotates each copy that cn still manages and leaves a hand-edited one alone. `cn logout` resets the Codex, OpenCode, Pi, and Cursor integrations so no copy of the key remains.
+
+During a `cn claude` session, MCP servers and approvals changed in the session are merged back into your `~/.claude.json`; nothing else from the session profile is kept. MCP browser sign-ins are stored by Claude under a fixed `cn` folder (`CLAUDE_SECURESTORAGE_CONFIG_DIR`), separate from your subscription login, which `cn claude` never reads.
 
 Restore records can contain the previous tool configuration, including secrets that were already there. They are stored in private directories (mode `0700`) as files restricted to mode `0600`. Reset removes a completed restore record; if user edits require keeping files, it retains the record for recovery and reports the edits. Native Configure does not change shell startup files or replace tool executables.
 

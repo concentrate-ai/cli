@@ -1,4 +1,7 @@
-import { listConfigurableTools } from "./configurable-tools.js";
+import {
+  configurableTool,
+  listConfigurableTools,
+} from "./configurable-tools.js";
 import type {
   Environment,
   Harness,
@@ -16,7 +19,7 @@ import {
   validateKey,
 } from "./catalog.js";
 import {
-  configureTool,
+  reconfigureTool,
   resetTool,
   codexProviderPresent,
   configureCodexProvider,
@@ -51,6 +54,7 @@ import { modelItem, modelLegend, modelRight } from "./ui/models.js";
 import { caps, pad, paint } from "./ui/term.js";
 import { glyphs } from "./ui/theme.js";
 import { interactive, password, select, spinner } from "./ui/widgets.js";
+import { updateNotice } from "./update.js";
 import { version } from "./version.js";
 
 const SUGGESTED_MODELS = ["claude-sonnet-4-6", "deepseek-v4-1-flash"];
@@ -365,8 +369,8 @@ export async function runKey(
 export function runLogout(env: Environment = process.env) {
   // Removing the key comes first in importance: a tool that cannot be reset
   // (Cursor running, a damaged config) must not keep the saved key on disk.
-  for (const id of ["opencode", "cursor"] as const) {
-    const label = id === "cursor" ? "Cursor desktop" : "OpenCode";
+  for (const id of ["opencode", "pi", "codex", "cursor"] as const) {
+    const label = configurableTool(id).label;
     try {
       if (!toolConfigured(id, env)) continue;
       const result = resetTool(id, env);
@@ -524,7 +528,7 @@ export async function runModel(
   writePreferences(models, env);
   if (toolConfigured(target, env)) {
     try {
-      await configureTool(target, env);
+      await reconfigureTool(target, env);
     } catch {
       console.log(
         ledger(
@@ -639,6 +643,8 @@ export async function runDoctor(
           : `${ledger("bad", adapter.label, "not installed", c)}\n    ${paint("mute", adapter.installHint, {}, c)}`,
       );
     }
+    const notice = await updateNotice(env);
+    if (notice) console.log(ledger("warn", "cn", notice, c));
     console.log(
       `\n  ${paint("mute", "Run cn doctor <tool> for a live route check.", {}, c)}`,
     );
