@@ -7,16 +7,11 @@
   billed at the full input price. Both now use the Responses API, as in
   Concentrate's Pi guide. Installing this version fixes `cn pi`, `cn opencode`,
   and tools set up with `cn configure`.
-- `cn claude` keeps Claude's prompt cache warm between launches. Without a
-  `~/.claude.json` of your own, each launch looked like a new device, so resumed
-  sessions re-sent the whole prompt at the cache-write price.
 - Pi keeps your MCP servers, extensions, and other settings under `cn pi`.
 - Pi and OpenCode show cost estimates with Concentrate prices.
 - `cn configure` stores the key in Pi and Codex directly, fixing Pi's
   intermittent `credential-helper` errors. Installing this version converts tools
   you set up with 0.1.0 for you.
-- Claude Code keeps MCP servers you add during a `cn claude` session, and stays
-  signed in to MCP servers between runs.
 - New `cn update`, `cn refresh`, and `cn changelog`. `cn` offers new versions
   when you start it, and installing refreshes the tools you configured.
 - `cn logout` also removes the key copies in configured tools.

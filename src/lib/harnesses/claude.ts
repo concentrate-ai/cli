@@ -2,14 +2,12 @@ import { record, positiveTokens } from "../validation.js";
 import type { Harness, Environment } from "../types.js";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
-import fs from "node:fs";
 import path from "node:path";
 
 import { prepareClaudeContext } from "../claude-context.js";
 import { prepareClaudeProfile } from "../claude-profile.js";
 import { repairClaudeSessions } from "../claude-session-repair.js";
 import { API_ROOT } from "../catalog.js";
-import { configDir } from "../settings.js";
 import { CLAUDE_BLANKED, CLAUDE_KEY_VAR, claudeSettings } from "../pickers.js";
 import { filesIn, lastModelInTranscript, regularFile } from "../recall.js";
 
@@ -101,11 +99,6 @@ const adapter: Harness = {
       settings.env.CLAUDE_CODE_AUTO_MODE_MODEL = classifierModel;
     if (env.CLAUDE_CODE_MAX_CONTEXT_TOKENS)
       settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = contextTokens;
-    // Claude keys its stored MCP sign-ins to the config directory, which is new
-    // every run. A fixed one keeps them between runs without ever sharing the
-    // subscription login. Claude versions that ignore this simply sign in again.
-    const mcpAuth = path.join(configDir(env), "claude-mcp-auth");
-    fs.mkdirSync(mcpAuth, { recursive: true, mode: 0o700 });
     const context = prepareClaudeContext({
       executable,
       available,
@@ -137,7 +130,6 @@ const adapter: Harness = {
         ANTHROPIC_BASE_URL: API_ROOT,
         ANTHROPIC_MODEL: model,
         CLAUDE_CONFIG_DIR: profile.directory,
-        CLAUDE_SECURESTORAGE_CONFIG_DIR: mcpAuth,
         [CLAUDE_KEY_VAR]: key,
         ENABLE_CLAUDEAI_MCP_SERVERS: claudeAiConnectors,
         ...(autoModeServer !== undefined
@@ -169,13 +161,6 @@ const adapter: Harness = {
             "cn: Claude session diagnostic cleanup could not be completed.",
           );
         } finally {
-          try {
-            profile.syncBack();
-          } catch {
-            console.error(
-              "cn: MCP changes made in this session could not be saved.",
-            );
-          }
           profile.cleanup();
         }
       },

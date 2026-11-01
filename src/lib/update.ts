@@ -186,9 +186,10 @@ export async function offerUpdate(env: Environment = process.env) {
 // Rewrites each permanently configured tool with the current model list and
 // prices. A tool whose settings were edited by hand is left alone.
 export async function refreshConfiguredTools(env: Environment = process.env) {
+  // Claude Code's setup is unchanged in this version, so it is left alone.
   const tools = listHarnesses()
     .map((h) => h.id)
-    .filter((id) => toolConfigured(id, env));
+    .filter((id) => id !== "claude" && toolConfigured(id, env));
   if (!tools.length) return 0;
   if (!readStoredKeyOrNull(env)) {
     console.log("No saved key, so configured tools were not refreshed.");

@@ -80,10 +80,6 @@ while you run through `cn`.
   switch models inside the session.
 - Claude.ai connectors belong to a subscription login, so they are turned off
   while you run through `cn`.
-- Your MCP servers work as usual. Servers you add or approve during a `cn claude`
-  session are saved to your normal Claude Code settings.
-- MCP servers that sign in through a browser need one sign-in inside `cn claude`,
-  separate from plain `claude`. After that they stay signed in.
 - Claude Code's cost estimates (`/cost`, the status line) use its own price list,
   so they can be wrong for non-Claude models. Your Concentrate dashboard has the
   actual charges.
@@ -153,7 +149,8 @@ since. Save your key first with `cn key`.
 - Codex, OpenCode, and Pi keep a copy of your key in their own settings, readable
   only by you. Claude Code gets it from `cn` when it starts.
 - `cn key` updates those copies, and `cn logout` removes them.
-- Run `cn refresh` to pick up new models and prices.
+- Run `cn refresh` to pick up new models and prices in Codex, OpenCode, and Pi.
+  For Claude Code, run `cn configure claude` again.
 - Installing or updating `cn` refreshes your configured tools for you. If it
   reports a problem, fix it and run `cn refresh`.
 

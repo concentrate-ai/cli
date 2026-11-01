@@ -65,10 +65,6 @@ This needs Claude Code mods to be enabled. Do not start Claude with `--bare` or
 They belong to a subscription login, which `cn` does not use. Run plain `claude`
 for them.
 
-**An MCP server asks me to sign in again**
-Browser sign-ins for MCP servers are kept separately for `cn claude` and plain
-`claude`. Sign in once inside `cn claude`; it is remembered after that.
-
 **Cost estimates look wrong for non-Claude models**
 Claude Code estimates cost from its own price list, which only knows Claude
 models. Your Concentrate dashboard shows the actual charges.
