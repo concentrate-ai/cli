@@ -85,7 +85,12 @@ test("piped web install verifies a built release, needs no npm, preserves creden
     env: f.env,
     encoding: "utf8",
   });
-  assert.equal(version.stdout.trim(), "0.1.0");
+  // The test serves a package built from this checkout, whatever its version.
+  assert.equal(
+    version.stdout.trim(),
+    JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
+      .version,
+  );
   assert.match(
     fs.readFileSync(f.env.CN_TEST_URLS, "utf8"),
     /https:\/\/github\.com\/concentrate-ai\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,

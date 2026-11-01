@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1
+## 0.1.1 (2026-11-01)
 
 - **Claude models in Pi and OpenCode now use prompt caching.** `cn` set both up
   on Chat Completions, where Concentrate does not cache Claude, so every turn was
