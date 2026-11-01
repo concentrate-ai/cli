@@ -47,7 +47,4 @@ export interface PiModel {
   reasoning: boolean;
   cost?: ModelCost;
   thinkingLevelMap?: Record<string, string | null>;
-  api?: string;
-  baseUrl?: string;
-  compat?: { forceAdaptiveThinking?: boolean };
 }

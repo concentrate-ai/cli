@@ -117,8 +117,8 @@ command line share `~/.codex/config.toml`.
 **Claude models show 0% cache hits, or cost far more than expected**
 Before 0.1.1, `cn` sent Claude models in Pi and OpenCode through an endpoint where
 Concentrate does not cache prompts, so each turn paid the full input price.
-Install the latest `cn`; it switches them to Concentrate's Anthropic endpoint,
-where caching works. OpenCode 1.x still uses the old path; use OpenCode 2 or
+Install the latest `cn`; it moves Pi to the Responses API and OpenCode's Claude
+models to the Messages API, where caching works. OpenCode 1.x still uses the old path; use OpenCode 2 or
 `cn claude` for Claude models.
 
 **OpenCode resume says the session was not found**
