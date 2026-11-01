@@ -30,7 +30,9 @@ export interface OpenCodeModel {
     reasoning?: { supported: boolean; effort?: Effort[]; toggle?: boolean };
   };
   modalities?: { input: string[]; output: string[] };
-  toolcall?: boolean;
+  tool_call?: boolean;
+  release_date?: string;
+  releaseDate?: string;
   reasoning?: boolean;
   variants?:
     | Record<string, Record<string, unknown>>

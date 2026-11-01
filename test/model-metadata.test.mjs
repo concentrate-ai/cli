@@ -7,6 +7,7 @@ import {
   piConfig,
   writeCodexCatalog,
 } from "../dist/lib/pickers.js";
+import { summarize } from "../dist/lib/catalog.js";
 import { fakeTool, tempDir } from "./helpers.mjs";
 
 const models = [
@@ -242,4 +243,37 @@ test("OpenCode sends Claude through its Anthropic package in both versions", () 
     thinking: { type: "enabled", budgetTokens: 16384 },
   });
   assert.equal(legacy.models["gpt-6.1-terra"].provider, undefined);
+});
+
+test("OpenCode gets tool calling, PDF input and release dates in each version's field names", () => {
+  const raw = summarize({
+    id: "m",
+    name: "M",
+    release_date: Date.UTC(2026, 8, 22),
+    capabilities: {
+      image_input: { supported: true },
+      pdf_input: { supported: true },
+    },
+    providers: {
+      p: {
+        provider_slug: "p",
+        supports: {
+          input: { text: true, image: { png: true }, file: { pdf: true } },
+          tools: { function_calling: true },
+        },
+      },
+    },
+  });
+  assert.equal(raw.released, "2026-09-22");
+  assert.equal(raw.variants[0].pdf, true);
+  const legacy = opencodeConfig("https://gw.test", "m", [raw]).provider
+    .concentrate.models.m;
+  assert.equal(legacy.tool_call, true);
+  assert.equal(legacy.toolcall, undefined);
+  assert.equal(legacy.release_date, "2026-09-22");
+  assert.deepEqual(legacy.modalities.input, ["text", "image", "pdf"]);
+  const modern = opencodeConfig("https://gw.test", "m", [raw], { modern: true })
+    .providers.concentrate.models.m;
+  assert.equal(modern.releaseDate, "2026-09-22");
+  assert.deepEqual(modern.capabilities.input, ["text", "image", "pdf"]);
 });

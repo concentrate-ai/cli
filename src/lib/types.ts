@@ -25,6 +25,9 @@ export interface Model {
   codex: boolean;
   chat_candidate: boolean;
   image: boolean;
+  pdf?: boolean;
+  // Release date as YYYY-MM-DD.
+  released?: string | null;
   reasoning: boolean;
   reasoningSupport: boolean | null;
   efforts: Effort[] | null;

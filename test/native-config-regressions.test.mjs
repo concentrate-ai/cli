@@ -143,7 +143,7 @@ test("Logout/Reset removes OpenCode's key file even if an unrelated setting was 
     env,
   );
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
-    version: 5,
+    version: 6,
     models: [
       summarize({
         id: "small",

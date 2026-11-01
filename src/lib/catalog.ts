@@ -144,6 +144,13 @@ function costOf(provider: Record<string, unknown>): ModelCost | null {
   return tiers.length ? { ...base, tiers } : base;
 }
 
+// The catalog's release date (milliseconds) as YYYY-MM-DD.
+function releaseDate(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? new Date(value).toISOString().slice(0, 10)
+    : null;
+}
+
 function savedCost(value: unknown): ModelCost | null {
   const cost = record(value);
   const valid = (entry: Record<string, unknown>) =>
@@ -189,6 +196,12 @@ function model(fields: Record<string, unknown>): Model {
     context: positiveTokens(fields.context),
     output: positiveTokens(fields.output),
     image: fields.image === true,
+    pdf: fields.pdf === true,
+    released:
+      typeof fields.released === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(fields.released)
+        ? fields.released
+        : null,
     reasoning: fields.reasoning === true,
     reasoningSupport:
       typeof fields.reasoningSupport === "boolean"
@@ -224,6 +237,8 @@ export function summarize(value: unknown): Model | null {
     context: raw.max_input_tokens,
     output: raw.max_tokens,
     image: record(capabilities.image_input).supported === true,
+    pdf: record(capabilities.pdf_input).supported === true,
+    released: releaseDate(raw.release_date),
     reasoning: record(capabilities.thinking).supported === true,
     reasoningSupport: record(capabilities.thinking).supported,
     cost: providers.map(costOf).find(Boolean) ?? null,
@@ -252,6 +267,7 @@ export function summarize(value: unknown): Model | null {
         context: p.context_window ?? summary.context,
         output: p.max_output_tokens ?? summary.output,
         image: Object.values(record(support(p, "input").image)).some(Boolean),
+        pdf: record(support(p, "input").file).pdf === true,
         cost: costOf(p),
         reasoning,
         reasoningSupport: isRecord(support(p, "reasoning").effort)
@@ -308,10 +324,10 @@ export async function fetchCatalog({
     cached = {};
   }
   // A cache written by another format version is not trustworthy, online or off.
-  // Versions 3 and 4 differ only in prices (none, or the wrong tier), so they
-  // are a fallback but never fresh.
-  const current = cached.version === 5;
-  const usable = current || cached.version === 3 || cached.version === 4;
+  // Versions 3-5 lack fields added since (prices, PDF input, release dates), so
+  // they are a fallback but never fresh.
+  const current = cached.version === 6;
+  const usable = current || [3, 4, 5].includes(Number(cached.version));
   const saved =
     usable && Array.isArray(cached.models)
       ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
@@ -338,7 +354,7 @@ export async function fetchCatalog({
   }
   // The list is good even when it cannot be saved (read-only or full disk).
   try {
-    writeJson(file, { version: 5, fetchedAt: Date.now() / 1000, models });
+    writeJson(file, { version: 6, fetchedAt: Date.now() / 1000, models });
   } catch {
     /* The next run fetches again. */
   }

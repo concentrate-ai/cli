@@ -168,7 +168,7 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 5,
+    version: 6,
     fetchedAt: Date.now() / 1000,
     models: [
       null,
@@ -268,7 +268,7 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 5,
+    version: 6,
     fetchedAt: 9e12,
     models: [{ id: "stale-model" }],
   });

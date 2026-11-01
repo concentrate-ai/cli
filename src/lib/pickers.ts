@@ -114,6 +114,12 @@ function anthropicSdkThinking(id: string, level: Effort) {
     : body;
 }
 
+const openCodeInputs = (entry: Model) => [
+  "text",
+  ...(entry.image ? ["image"] : []),
+  ...(entry.pdf ? ["pdf"] : []),
+];
+
 export function opencodeConfig(
   apiRoot: string,
   model: string,
@@ -137,6 +143,7 @@ export function opencodeConfig(
           entry.id,
           {
             ...common,
+            ...(entry.released ? { releaseDate: entry.released } : {}),
             ...(entry.cost
               ? {
                   cost: {
@@ -172,7 +179,7 @@ export function opencodeConfig(
               ...(typeof entry.chat_candidate === "boolean"
                 ? { tools: entry.chat_candidate }
                 : {}),
-              input: entry.image ? ["text", "image"] : ["text"],
+              input: openCodeInputs(entry),
               output: ["text"],
               ...(typeof entry.reasoningSupport === "boolean" ||
               entry.reasoning === true
@@ -195,6 +202,7 @@ export function opencodeConfig(
         entry.id,
         {
           ...common,
+          ...(entry.released ? { release_date: entry.released } : {}),
           ...(entry.cost
             ? {
                 cost: {
@@ -206,11 +214,11 @@ export function opencodeConfig(
               }
             : {}),
           modalities: {
-            input: entry.image ? ["text", "image"] : ["text"],
+            input: openCodeInputs(entry),
             output: ["text"],
           },
           ...(typeof entry.chat_candidate === "boolean"
-            ? { toolcall: entry.chat_candidate }
+            ? { tool_call: entry.chat_candidate }
             : {}),
           ...(typeof entry.reasoningSupport === "boolean" ||
           entry.reasoning === true
