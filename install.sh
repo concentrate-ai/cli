@@ -176,6 +176,8 @@ fi
 mkdir -p "$(dirname "$install_dir")" "$bin_dir"
 staged_dir="$(mktemp -d "$(dirname "$install_dir")/.concentrate-cli.XXXXXX")"
 cp -R "$package_dir/dist" "$package_dir/package.json" "$staged_dir/"
+# `cn changelog` and the notes printed after `cn update` read this file.
+if [[ -f "$package_dir/CHANGELOG.md" ]]; then cp "$package_dir/CHANGELOG.md" "$staged_dir/"; fi
 "$node_bin" "$staged_dir/dist/bin/cn.js" --version >/dev/null
 launcher_temp="$(mktemp "$bin_dir/.cn.XXXXXX")"
 

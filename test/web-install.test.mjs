@@ -25,6 +25,7 @@ function fixture() {
     "dist",
     "package.json",
     "install.sh",
+    "CHANGELOG.md",
   ]);
   const hash = createHash("sha256")
     .update(fs.readFileSync(archive))
@@ -96,6 +97,13 @@ test("piped web install verifies a built release, needs no npm, preserves creden
     /https:\/\/github\.com\/concentrate-ai\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,
   );
   assert.equal(fs.existsSync(path.join(f.runtime, "node_modules")), false);
+  // The changelog ships with the install, for `cn changelog` and `cn update`.
+  const notes = spawnSync(f.launcher, ["changelog"], {
+    env: f.env,
+    encoding: "utf8",
+  });
+  assert.equal(notes.status, 0, notes.stderr);
+  assert.match(notes.stdout, /^\d+\.\d+\.\d+/);
   assert.equal(
     fs.readFileSync(
       path.join(f.env.CN_CONFIG_HOME, "credentials.json"),
