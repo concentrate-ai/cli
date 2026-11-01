@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Environment } from "./types.js";
+import { configDir } from "./settings.js";
 import { isRecord } from "./validation.js";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -80,6 +82,25 @@ export function mergeMcpChanges(
   return next;
 }
 
+// One device ID for every cn claude launch, kept with cn's own state.
+function deviceId(env: Environment) {
+  const file = path.join(configDir(env), "claude-device-id");
+  try {
+    const saved = fs.readFileSync(file, "utf8").trim();
+    if (/^[0-9a-f]{64}$/.test(saved)) return saved;
+  } catch {
+    // not created yet
+  }
+  const id = randomBytes(32).toString("hex");
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(file, id + "\n", { mode: 0o600 });
+  } catch {
+    // Unsaved, this launch still works; the next one picks a new ID.
+  }
+  return id;
+}
+
 // Claude writes /model selections to its user settings even when launched with
 // --settings. Isolate that writable state while sharing only session transcripts.
 export function prepareClaudeProfile(env: Environment) {
@@ -119,8 +140,18 @@ export function prepareClaudeProfile(env: Environment) {
       ? path.join(source, ".claude.json")
       : path.join(home, ".claude.json");
     const startState = readState(global);
-    if (fs.existsSync(global))
-      fs.copyFileSync(global, path.join(directory, ".claude.json"));
+    const profileState = path.join(directory, ".claude.json");
+    if (fs.existsSync(global)) fs.copyFileSync(global, profileState);
+    // Claude sends a device ID with every request, and Concentrate's prompt
+    // cache follows it. Without the user's own, Claude would invent a new one
+    // each launch, so every session would start from a cold cache.
+    const state = fs.existsSync(profileState) ? readState(profileState) : {};
+    if (state && !(typeof state.userID === "string" && state.userID)) {
+      state.userID = deviceId(env);
+      fs.writeFileSync(profileState, JSON.stringify(state, null, 2), {
+        mode: 0o600,
+      });
+    }
     // MCP servers and approvals changed during the session are carried back to
     // the real file; the rest of the profile stays throwaway.
     const syncBack = () => {

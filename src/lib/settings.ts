@@ -220,6 +220,7 @@ const STATE_FILES = [
   "catalog.json",
   "codex-provider-declined",
   "claude-mcp-auth",
+  "claude-device-id",
   "update-check.json",
   "update-prompt.json",
 ];

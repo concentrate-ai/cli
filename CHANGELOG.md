@@ -7,6 +7,9 @@
   billed at the full input price. Both now use the Responses API, as in
   Concentrate's Pi guide. Installing this version fixes `cn pi`, `cn opencode`,
   and tools set up with `cn configure`.
+- `cn claude` keeps Claude's prompt cache warm between launches. Without a
+  `~/.claude.json` of your own, each launch looked like a new device, so resumed
+  sessions re-sent the whole prompt at the cache-write price.
 - Pi keeps your MCP servers, extensions, and other settings under `cn pi`.
 - Pi and OpenCode show cost estimates with Concentrate prices.
 - `cn configure` stores the key in Pi and Codex directly, fixing Pi's
