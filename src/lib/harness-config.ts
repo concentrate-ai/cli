@@ -33,8 +33,13 @@ export interface OpenCodeModel {
   toolcall?: boolean;
   reasoning?: boolean;
   variants?:
-    | Record<string, { reasoningEffort: Effort }>
-    | { id: Effort; body: { reasoning: { effort: Effort } } }[];
+    | Record<string, Record<string, unknown>>
+    | { id: Effort; body: Record<string, unknown> }[];
+  // OpenCode 2: a different provider package for this model.
+  package?: string;
+  settings?: { baseURL: string };
+  // OpenCode 1.x: the same, in its own shape.
+  provider?: { npm: string };
 }
 export interface PiModel {
   id: string;
@@ -45,4 +50,7 @@ export interface PiModel {
   reasoning: boolean;
   cost?: ModelCost;
   thinkingLevelMap?: Record<string, string | null>;
+  api?: string;
+  baseUrl?: string;
+  compat?: { forceAdaptiveThinking?: boolean };
 }

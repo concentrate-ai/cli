@@ -6,7 +6,7 @@ import type {
 } from "./harness-config.js";
 import { EFFORTS, modelEfforts, defaultModelEffort } from "./model-metadata.js";
 import { isRecord, record } from "./validation.js";
-import type { Environment, Model } from "./types.js";
+import type { Effort, Environment, Model } from "./types.js";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
@@ -86,6 +86,34 @@ export function claudeSettings(
 const positiveTokens = (value: number | null): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 
+// Claude's thinking setting on the Messages API for one reasoning level: an
+// effort for adaptive models, a token budget for older ones.
+function anthropicThinking(id: string, level: Effort) {
+  if (level === "none") return { thinking: { type: "disabled" } };
+  if (adaptiveClaude(id)) return { output_config: { effort: level } };
+  const budget = { minimal: 2048, low: 4096, medium: 10000, high: 16384 };
+  return {
+    thinking: {
+      type: "enabled",
+      budget_tokens: budget[level as keyof typeof budget] ?? 32000,
+    },
+  };
+}
+
+// The same for OpenCode 1.x, whose Anthropic SDK takes its own option names.
+function anthropicSdkThinking(id: string, level: Effort) {
+  const body = anthropicThinking(id, level);
+  if ("output_config" in body) return { effort: level };
+  return "budget_tokens" in body.thinking
+    ? {
+        thinking: {
+          type: "enabled",
+          budgetTokens: body.thinking.budget_tokens,
+        },
+      }
+    : body;
+}
+
 export function opencodeConfig(
   apiRoot: string,
   model: string,
@@ -99,6 +127,7 @@ export function opencodeConfig(
         ...(positiveTokens(entry.output) ? { output: entry.output } : {}),
       };
       const efforts = modelEfforts(entry);
+      const claude = isClaudeModel(entry.id);
       const common = {
         name: entry.name,
         ...(Object.keys(limit).length ? { limit } : {}),
@@ -120,12 +149,22 @@ export function opencodeConfig(
                   },
                 }
               : {}),
+            // Claude is cached as its conversation grows only on Concentrate's
+            // Messages endpoint; on Responses earlier tool results are rewritten.
+            ...(claude
+              ? {
+                  package: "@opencode/ai/providers/anthropic",
+                  settings: { baseURL: `${apiRoot}/v1` },
+                }
+              : {}),
             // Explicit variants also cover v2 releases predating capabilities.reasoning.
             ...(efforts
               ? {
                   variants: efforts.map((level) => ({
                     id: level,
-                    body: { reasoning: { effort: level } },
+                    body: claude
+                      ? anthropicThinking(entry.id, level)
+                      : { reasoning: { effort: level } },
                   })),
                 }
               : {}),
@@ -177,10 +216,18 @@ export function opencodeConfig(
           entry.reasoning === true
             ? { reasoning: entry.reasoningSupport ?? entry.reasoning }
             : {}),
+          // OpenCode 1.x: Claude through the Anthropic SDK and the Messages
+          // endpoint, with that SDK's names for the thinking options.
+          ...(claude ? { provider: { npm: "@ai-sdk/anthropic" } } : {}),
           ...(efforts
             ? {
                 variants: Object.fromEntries(
-                  efforts.map((level) => [level, { reasoningEffort: level }]),
+                  efforts.map((level) => [
+                    level,
+                    claude
+                      ? anthropicSdkThinking(entry.id, level)
+                      : { reasoningEffort: level },
+                  ]),
                 ),
               }
             : {}),
@@ -225,6 +272,27 @@ export function opencodeConfig(
   };
 }
 
+// Claude models, including provider-pinned IDs such as anthropic/claude-….
+export const isClaudeModel = (id: string) =>
+  (id.split("/").pop() ?? id).startsWith("claude-");
+
+// A Claude model's version, such as [4, 6] for claude-sonnet-4-6.
+function claudeVersion(id: string): [number, number] | null {
+  const match = /^claude-[a-z]+-(\d+)(?:-(\d+))?(?:$|-\d{8})/.exec(
+    id.split("/").pop() ?? id,
+  );
+  return match ? [Number(match[1]), Number(match[2] ?? 0)] : null;
+}
+const atLeast = (id: string, major: number, minor: number) => {
+  const version = claudeVersion(id);
+  if (!version) return true;
+  return version[0] > major || (version[0] === major && version[1] >= minor);
+};
+
+// Claude 4.6 and newer think adaptively at an effort level; older Claude models
+// reject that and need token budgets instead.
+export const adaptiveClaude = (id: string) => atLeast(id, 4, 6);
+
 export function piConfig(
   apiRoot: string,
   models: Model[],
@@ -240,6 +308,15 @@ export function piConfig(
     if (positiveTokens(entry.context)) data.contextWindow = entry.context;
     if (positiveTokens(entry.output)) data.maxTokens = entry.output;
     if (entry.cost) data.cost = entry.cost;
+    // Concentrate's Messages endpoint caches a Claude conversation as it grows,
+    // with Pi marking each new turn. On Responses the cache falls behind during
+    // tool loops and earlier tool results are written again at 1.25x price.
+    // Claude before 4.5 stays on Responses: Bedrock rejects the field Pi adds to
+    // budget thinking on those models through the Messages endpoint.
+    if (isClaudeModel(entry.id) && atLeast(entry.id, 4, 5)) {
+      data.api = "anthropic-messages";
+      data.baseUrl = apiRoot;
+    }
     const efforts = modelEfforts(entry);
     if (data.reasoning && efforts) {
       data.thinkingLevelMap = Object.fromEntries(
@@ -254,6 +331,8 @@ export function piConfig(
             : null,
         ]),
       );
+      if (data.api === "anthropic-messages" && adaptiveClaude(entry.id))
+        data.compat = { forceAdaptiveThinking: true };
     }
     return data;
   });

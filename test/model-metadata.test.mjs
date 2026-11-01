@@ -168,47 +168,78 @@ test("Codex catalog validation accepts output larger than the subprocess buffer"
   assert.equal(writeCodexCatalog(executable, models, destination), destination);
 });
 
-test("Pi uses the Responses API, where Concentrate caches Claude prompts", () => {
-  const provider = piConfig("https://gw.test", [
-    {
-      id: "claude-sonnet-4-6",
-      name: "Sonnet",
-      context: 200000,
-      output: 64000,
-      claude: true,
-      codex: false,
-      chat_candidate: true,
-      image: false,
-      reasoning: false,
-      reasoningSupport: null,
-      efforts: null,
-    },
-  ]).providers.concentrate;
-  assert.equal(provider.api, "openai-responses");
-  assert.equal(provider.baseUrl, "https://gw.test/v1");
-  assert.equal(provider.models[0].api, undefined);
+const claudeEntry = (id, efforts) => ({
+  id,
+  name: id,
+  context: 200000,
+  output: 64000,
+  claude: true,
+  codex: false,
+  chat_candidate: true,
+  image: false,
+  reasoning: Boolean(efforts),
+  reasoningSupport: efforts ? true : null,
+  efforts,
 });
 
-test("OpenCode uses the Responses API for every model in both versions", () => {
-  const entry = {
-    id: "claude-sonnet-4-6",
-    name: "Sonnet",
-    context: 200000,
-    output: 64000,
-    claude: true,
-    codex: false,
-    chat_candidate: true,
-    image: false,
-    reasoning: false,
-    reasoningSupport: null,
-    efforts: null,
-  };
-  const modern = opencodeConfig("https://gw.test", entry.id, [entry], {
+test("Pi sends Claude to the Messages endpoint and everything else to Responses", () => {
+  const provider = piConfig("https://gw.test", [
+    claudeEntry("claude-opus-5-5", ["low", "high"]),
+    claudeEntry("claude-sonnet-4-5", ["none", "low", "high"]),
+    { ...claudeEntry("gpt-6.1-terra", ["low", "high"]), claude: false },
+  ]).providers.concentrate;
+  assert.equal(provider.api, "openai-responses");
+  const [opus, sonnet, gpt] = provider.models;
+  assert.equal(opus.api, "anthropic-messages");
+  assert.equal(opus.baseUrl, "https://gw.test");
+  assert.deepEqual(opus.compat, { forceAdaptiveThinking: true });
+  assert.equal(sonnet.compat, undefined, "Claude before 4.6 uses budgets");
+  assert.equal(gpt.api, undefined);
+  const [old] = piConfig("https://gw.test", [
+    claudeEntry("claude-opus-4-1", ["low", "high"]),
+  ]).providers.concentrate.models;
+  assert.equal(old.api, undefined, "Claude before 4.5 stays on Responses");
+});
+
+test("OpenCode sends Claude through its Anthropic package in both versions", () => {
+  const models = [
+    claudeEntry("claude-opus-5-5", ["low", "high"]),
+    claudeEntry("claude-sonnet-4-5", ["none", "high"]),
+    { ...claudeEntry("gpt-6.1-terra", ["low", "high"]), claude: false },
+  ];
+  const modern = opencodeConfig("https://gw.test", "claude-opus-5-5", models, {
     modern: true,
   }).providers.concentrate;
   assert.equal(modern.package, "@opencode/ai/providers/openai");
-  assert.equal(modern.models[entry.id].package, undefined);
-  const legacy = opencodeConfig("https://gw.test", entry.id, [entry]).provider
-    .concentrate;
+  const opus = modern.models["claude-opus-5-5"];
+  assert.equal(opus.package, "@opencode/ai/providers/anthropic");
+  assert.deepEqual(opus.settings, { baseURL: "https://gw.test/v1" });
+  assert.deepEqual(opus.variants[1], {
+    id: "high",
+    body: { output_config: { effort: "high" } },
+  });
+  assert.deepEqual(modern.models["claude-sonnet-4-5"].variants, [
+    { id: "none", body: { thinking: { type: "disabled" } } },
+    {
+      id: "high",
+      body: { thinking: { type: "enabled", budget_tokens: 16384 } },
+    },
+  ]);
+  assert.equal(modern.models["gpt-6.1-terra"].package, undefined);
+  assert.deepEqual(modern.models["gpt-6.1-terra"].variants[1].body, {
+    reasoning: { effort: "high" },
+  });
+  const legacy = opencodeConfig("https://gw.test", "claude-opus-5-5", models)
+    .provider.concentrate;
   assert.equal(legacy.npm, "@ai-sdk/openai");
+  assert.deepEqual(legacy.models["claude-opus-5-5"].provider, {
+    npm: "@ai-sdk/anthropic",
+  });
+  assert.deepEqual(legacy.models["claude-opus-5-5"].variants.high, {
+    effort: "high",
+  });
+  assert.deepEqual(legacy.models["claude-sonnet-4-5"].variants.high, {
+    thinking: { type: "enabled", budgetTokens: 16384 },
+  });
+  assert.equal(legacy.models["gpt-6.1-terra"].provider, undefined);
 });
