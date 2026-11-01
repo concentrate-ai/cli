@@ -82,9 +82,7 @@ test("both versions get native provider config, with the key by reference only",
     const provider = (parsed.providers ?? parsed.provider).concentrate;
     assert.equal(
       provider.package ?? provider.npm,
-      version === "v2"
-        ? "@opencode/ai/providers/openai-compatible"
-        : "@ai-sdk/openai-compatible",
+      version === "v2" ? "@opencode/ai/providers/openai" : "@ai-sdk/openai",
     );
     assert.equal(
       (provider.settings ?? provider.options).baseURL,

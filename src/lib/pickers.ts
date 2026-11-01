@@ -108,13 +108,6 @@ export function opencodeConfig(
           entry.id,
           {
             ...common,
-            // Claude prompts are only cached on Concentrate's Anthropic endpoint.
-            ...(isClaudeModel(entry.id)
-              ? {
-                  package: "@opencode/ai/providers/anthropic",
-                  settings: { baseURL: `${apiRoot}/v1` },
-                }
-              : {}),
             ...(entry.cost
               ? {
                   cost: {
@@ -132,7 +125,7 @@ export function opencodeConfig(
               ? {
                   variants: efforts.map((level) => ({
                     id: level,
-                    body: { reasoning_effort: level },
+                    body: { reasoning: { effort: level } },
                   })),
                 }
               : {}),
@@ -201,7 +194,8 @@ export function opencodeConfig(
       model: `concentrate/${model}`,
       providers: {
         concentrate: {
-          package: "@opencode/ai/providers/openai-compatible",
+          // Responses API: Chat Completions does not cache Claude prompts.
+          package: "@opencode/ai/providers/openai",
           headers,
           name: "Concentrate AI",
           settings: {
@@ -217,7 +211,8 @@ export function opencodeConfig(
     model: `concentrate/${model}`,
     provider: {
       concentrate: {
-        npm: "@ai-sdk/openai-compatible",
+        // Responses API: Chat Completions does not cache Claude prompts.
+        npm: "@ai-sdk/openai",
         name: "Concentrate AI",
         options: {
           headers,
@@ -229,10 +224,6 @@ export function opencodeConfig(
     },
   };
 }
-
-// Claude models, including provider-pinned IDs such as anthropic/claude-….
-export const isClaudeModel = (id: string) =>
-  (id.split("/").pop() ?? id).startsWith("claude-");
 
 export function piConfig(
   apiRoot: string,

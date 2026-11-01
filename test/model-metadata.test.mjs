@@ -64,7 +64,7 @@ for (const modern of [false, true]) {
         catalog.large.variants.map((entry) => entry.id),
         ["none", "low", "medium", "max"],
       );
-      assert.equal(catalog.large.variants.at(-1).body.reasoning_effort, "max");
+      assert.equal(catalog.large.variants.at(-1).body.reasoning.effort, "max");
       assert.equal(catalog.unknown.capabilities.reasoning, undefined);
       assert.equal(catalog.large.modalities, undefined);
     } else {
@@ -189,10 +189,10 @@ test("Pi uses the Responses API, where Concentrate caches Claude prompts", () =>
   assert.equal(provider.models[0].api, undefined);
 });
 
-test("OpenCode 2 sends Claude models through its Anthropic package", () => {
-  const entry = (id) => ({
-    id,
-    name: id,
+test("OpenCode uses the Responses API for every model in both versions", () => {
+  const entry = {
+    id: "claude-sonnet-4-6",
+    name: "Sonnet",
     context: 200000,
     output: 64000,
     claude: true,
@@ -202,19 +202,13 @@ test("OpenCode 2 sends Claude models through its Anthropic package", () => {
     reasoning: false,
     reasoningSupport: null,
     efforts: null,
-  });
-  const models = opencodeConfig(
-    "https://gw.test",
-    "claude-sonnet-4-6",
-    [entry("claude-sonnet-4-6"), entry("deepseek-v4-1-flash")],
-    { modern: true },
-  ).providers.concentrate.models;
-  assert.equal(
-    models["claude-sonnet-4-6"].package,
-    "@opencode/ai/providers/anthropic",
-  );
-  assert.deepEqual(models["claude-sonnet-4-6"].settings, {
-    baseURL: "https://gw.test/v1",
-  });
-  assert.equal(models["deepseek-v4-1-flash"].package, undefined);
+  };
+  const modern = opencodeConfig("https://gw.test", entry.id, [entry], {
+    modern: true,
+  }).providers.concentrate;
+  assert.equal(modern.package, "@opencode/ai/providers/openai");
+  assert.equal(modern.models[entry.id].package, undefined);
+  const legacy = opencodeConfig("https://gw.test", entry.id, [entry]).provider
+    .concentrate;
+  assert.equal(legacy.npm, "@ai-sdk/openai");
 });

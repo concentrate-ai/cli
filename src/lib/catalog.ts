@@ -50,13 +50,9 @@ async function requestJson(
 
 export async function validateKey(key: string) {
   try {
-    await requestJson(`${API_ROOT}/v1/chat/completions`, {
+    await requestJson(`${API_ROOT}/v1/responses`, {
       headers: { Authorization: `Bearer ${key}` },
-      body: {
-        model: VALIDATION_MODEL,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 1,
-      },
+      body: { model: VALIDATION_MODEL, input: "ping", max_output_tokens: 16 },
     });
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
@@ -320,18 +316,11 @@ export async function probeHarness(
       max_tokens: 8,
       messages: [{ role: "user", content: "Reply OK." }],
     };
-  } else if (harness === "codex") {
+  } else {
+    // Codex, OpenCode, and Pi all use the Responses API.
     url = `${API_ROOT}/v1/responses`;
     headers = { Authorization: `Bearer ${key}` };
-    body = { model, input: "Reply OK.", max_output_tokens: 8 };
-  } else {
-    url = `${API_ROOT}/v1/chat/completions`;
-    headers = { Authorization: `Bearer ${key}` };
-    body = {
-      model,
-      messages: [{ role: "user", content: "Reply OK." }],
-      max_tokens: 8,
-    };
+    body = { model, input: "Reply OK.", max_output_tokens: 16 };
   }
   try {
     await requestJson(url, { headers, body, timeoutMs: 30000 });

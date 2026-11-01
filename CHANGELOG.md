@@ -2,12 +2,11 @@
 
 ## 0.1.1
 
-- **Claude models in Pi and OpenCode now use prompt caching.** `cn` sent them
-  through Chat Completions, where Concentrate does not cache Claude, so every
-  turn was billed at the full input price. Pi now uses the Responses API, as in
-  Concentrate's Pi guide, and OpenCode sends Claude through the Anthropic
-  Messages API. Installing this version fixes `cn pi`, `cn opencode`, and tools
-  set up with `cn configure`.
+- **Claude models in Pi and OpenCode now use prompt caching.** `cn` set both up
+  on Chat Completions, where Concentrate does not cache Claude, so every turn was
+  billed at the full input price. Both now use the Responses API, as in
+  Concentrate's Pi guide. Installing this version fixes `cn pi`, `cn opencode`,
+  and tools set up with `cn configure`.
 - Pi keeps your MCP servers, extensions, and other settings under `cn pi`.
 - Pi and OpenCode show cost estimates with Concentrate prices.
 - `cn configure` stores the key in Pi and Codex directly, fixing Pi's

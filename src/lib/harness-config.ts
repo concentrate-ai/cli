@@ -14,8 +14,6 @@ export interface ClaudeSettings {
 }
 export interface OpenCodeModel {
   name: string;
-  package?: string;
-  settings?: { baseURL: string };
   limit?: { context?: number; output?: number };
   cost?:
     | { input: number; output: number; cache: { read: number; write: number } }
@@ -36,7 +34,7 @@ export interface OpenCodeModel {
   reasoning?: boolean;
   variants?:
     | Record<string, { reasoningEffort: Effort }>
-    | { id: Effort; body: { reasoning_effort: Effort } }[];
+    | { id: Effort; body: { reasoning: { effort: Effort } } }[];
 }
 export interface PiModel {
   id: string;
