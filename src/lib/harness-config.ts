@@ -14,6 +14,8 @@ export interface ClaudeSettings {
 }
 export interface OpenCodeModel {
   name: string;
+  package?: string;
+  settings?: { baseURL: string };
   limit?: { context?: number; output?: number };
   cost?:
     | { input: number; output: number; cache: { read: number; write: number } }
@@ -45,4 +47,7 @@ export interface PiModel {
   reasoning: boolean;
   cost?: ModelCost;
   thinkingLevelMap?: Record<string, string | null>;
+  api?: string;
+  baseUrl?: string;
+  compat?: { forceAdaptiveThinking?: boolean };
 }

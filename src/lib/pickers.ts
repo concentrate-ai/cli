@@ -108,6 +108,13 @@ export function opencodeConfig(
           entry.id,
           {
             ...common,
+            // Claude prompts are only cached on Concentrate's Anthropic endpoint.
+            ...(isClaudeModel(entry.id)
+              ? {
+                  package: "@opencode/ai/providers/anthropic",
+                  settings: { baseURL: `${apiRoot}/v1` },
+                }
+              : {}),
             ...(entry.cost
               ? {
                   cost: {
@@ -223,6 +230,19 @@ export function opencodeConfig(
   };
 }
 
+// Claude models, including provider-pinned IDs such as anthropic/claude-….
+export const isClaudeModel = (id: string) =>
+  (id.split("/").pop() ?? id).startsWith("claude-");
+
+function adaptiveClaude(id: string) {
+  const match = /^claude-[a-z]+-(\d+)(?:-(\d+))?(?:$|-\d{8})/.exec(
+    id.split("/").pop() ?? id,
+  );
+  if (!match) return true;
+  const [major, minor] = [Number(match[1]), Number(match[2] ?? 0)];
+  return major > 4 || (major === 4 && minor >= 6);
+}
+
 export function piConfig(
   apiRoot: string,
   models: Model[],
@@ -238,6 +258,12 @@ export function piConfig(
     if (positiveTokens(entry.context)) data.contextWindow = entry.context;
     if (positiveTokens(entry.output)) data.maxTokens = entry.output;
     if (entry.cost) data.cost = entry.cost;
+    // Concentrate caches Claude prompts only on its Anthropic endpoint, where Pi
+    // marks what to cache. Through chat completions every turn pays full price.
+    if (isClaudeModel(entry.id)) {
+      data.api = "anthropic-messages";
+      data.baseUrl = apiRoot;
+    }
     const efforts = modelEfforts(entry);
     if (data.reasoning && efforts) {
       data.thinkingLevelMap = Object.fromEntries(
@@ -252,6 +278,10 @@ export function piConfig(
             : null,
         ]),
       );
+      // Claude 4.6 and newer think adaptively at an effort level; older Claude
+      // models reject that and need Pi's token budgets instead.
+      if (data.api === "anthropic-messages" && adaptiveClaude(entry.id))
+        data.compat = { forceAdaptiveThinking: true };
     }
     return data;
   });

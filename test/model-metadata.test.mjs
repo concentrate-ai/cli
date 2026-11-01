@@ -167,3 +167,69 @@ test("Codex catalog validation accepts output larger than the subprocess buffer"
   const destination = path.join(dir, "models.json");
   assert.equal(writeCodexCatalog(executable, models, destination), destination);
 });
+
+test("Pi sends Claude models to the Anthropic endpoint, where prompts are cached", () => {
+  const make = (id, efforts) => ({
+    id,
+    name: id,
+    context: 200000,
+    output: 64000,
+    claude: true,
+    codex: false,
+    chat_candidate: true,
+    image: false,
+    reasoning: true,
+    reasoningSupport: true,
+    efforts,
+  });
+  const [fresh, old, pinned, other] = piConfig("https://gw.test", [
+    make("claude-sonnet-4-6", ["none", "low", "medium", "high"]),
+    make("claude-sonnet-4-5", ["none", "low", "medium", "high"]),
+    make("anthropic/claude-opus-5", ["low", "high"]),
+    make("gpt-6.1-terra", ["low", "high"]),
+  ]).providers.concentrate.models;
+  for (const entry of [fresh, old, pinned]) {
+    assert.equal(entry.api, "anthropic-messages");
+    assert.equal(entry.baseUrl, "https://gw.test");
+  }
+  assert.deepEqual(fresh.compat, { forceAdaptiveThinking: true });
+  assert.deepEqual(pinned.compat, { forceAdaptiveThinking: true });
+  assert.equal(
+    old.compat,
+    undefined,
+    "Claude before 4.6 needs thinking budgets",
+  );
+  assert.equal(other.api, undefined);
+  assert.equal(other.baseUrl, undefined);
+  assert.equal(other.compat, undefined);
+});
+
+test("OpenCode 2 sends Claude models through its Anthropic package", () => {
+  const entry = (id) => ({
+    id,
+    name: id,
+    context: 200000,
+    output: 64000,
+    claude: true,
+    codex: false,
+    chat_candidate: true,
+    image: false,
+    reasoning: false,
+    reasoningSupport: null,
+    efforts: null,
+  });
+  const models = opencodeConfig(
+    "https://gw.test",
+    "claude-sonnet-4-6",
+    [entry("claude-sonnet-4-6"), entry("deepseek-v4-1-flash")],
+    { modern: true },
+  ).providers.concentrate.models;
+  assert.equal(
+    models["claude-sonnet-4-6"].package,
+    "@opencode/ai/providers/anthropic",
+  );
+  assert.deepEqual(models["claude-sonnet-4-6"].settings, {
+    baseURL: "https://gw.test/v1",
+  });
+  assert.equal(models["deepseek-v4-1-flash"].package, undefined);
+});

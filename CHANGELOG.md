@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- **Claude models in Pi and OpenCode now use prompt caching.** They were sent
+  through an endpoint where Concentrate does not cache Claude, so every turn was
+  billed at the full input price. Installing this version fixes `cn pi`,
+  `cn opencode`, and tools set up with `cn configure`.
 - Pi keeps your MCP servers, extensions, and other settings under `cn pi`.
 - Pi and OpenCode show cost estimates with Concentrate prices.
 - `cn configure` stores the key in Pi and Codex directly, fixing Pi's
