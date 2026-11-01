@@ -115,8 +115,8 @@ afterward. Codex, OpenCode, and Pi keep a private copy of your key in their own
 settings; `cn key` updates it and `cn logout` removes it. Claude Code gets the key
 from `cn` through a small helper.
 
-The saved model list and prices are a snapshot. Run `cn refresh` to update
-configured Codex, OpenCode, and Pi at once (for Claude Code, run Configure again), or Configure again for one tool. `cn update` refreshes
+The saved model list and prices are a snapshot. Run `cn refresh` to update every
+configured tool at once, or Configure again for one tool. `cn update` refreshes
 them too. A Codex setup that only added the Concentrate provider (for plain
 `codex resume`) stays that way when refreshed.
 

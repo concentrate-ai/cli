@@ -78,3 +78,34 @@ test("Claude profile isolates settings while sharing conversation files", () => 
   assert.equal(fs.existsSync(profile.directory), false);
   assert.equal(fs.existsSync(session), true);
 });
+test("cn claude launches share one device ID, so the prompt cache stays warm", () => {
+  const root = tempDir("cn-profile-device-");
+  const env = { HOME: root, CN_CONFIG_HOME: path.join(root, "cn") };
+  const ids = [1, 2].map(() => {
+    const profile = prepareClaudeProfile(env);
+    try {
+      return JSON.parse(
+        fs.readFileSync(path.join(profile.directory, ".claude.json"), "utf8"),
+      ).userID;
+    } finally {
+      profile.cleanup();
+    }
+  });
+  assert.match(ids[0], /^[0-9a-f]{64}$/);
+  assert.equal(ids[0], ids[1]);
+  // The user's own ID, when Claude already made one, is kept.
+  fs.writeFileSync(
+    path.join(root, ".claude.json"),
+    JSON.stringify({ userID: "mine", theme: "dark" }),
+  );
+  const profile = prepareClaudeProfile(env);
+  try {
+    const doc = JSON.parse(
+      fs.readFileSync(path.join(profile.directory, ".claude.json"), "utf8"),
+    );
+    assert.equal(doc.userID, "mine");
+    assert.equal(doc.theme, "dark");
+  } finally {
+    profile.cleanup();
+  }
+});

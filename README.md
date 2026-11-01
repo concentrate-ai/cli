@@ -149,8 +149,7 @@ since. Save your key first with `cn key`.
 - Codex, OpenCode, and Pi keep a copy of your key in their own settings, readable
   only by you. Claude Code gets it from `cn` when it starts.
 - `cn key` updates those copies, and `cn logout` removes them.
-- Run `cn refresh` to pick up new models and prices in Codex, OpenCode, and Pi.
-  For Claude Code, run `cn configure claude` again.
+- Run `cn refresh` to pick up new models and prices.
 - Installing or updating `cn` refreshes your configured tools for you. If it
   reports a problem, fix it and run `cn refresh`.
 
