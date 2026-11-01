@@ -6,11 +6,15 @@ export type Preferences = Record<HarnessId, string>;
 export type Effort =
   "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 // US dollars per million tokens.
-export interface ModelCost {
+export interface TokenPrices {
   input: number;
   output: number;
   cacheRead: number;
   cacheWrite: number;
+}
+export interface ModelCost extends TokenPrices {
+  // Higher prices that apply once a request's input passes a size.
+  tiers?: (TokenPrices & { inputTokensAbove: number })[];
 }
 export interface Model {
   id: string;

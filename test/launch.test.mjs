@@ -213,7 +213,7 @@ test("claude receives catalog context limits for custom and provider-pinned mode
     fs.writeFileSync(
       path.join(config, "catalog.json"),
       JSON.stringify({
-        version: 4,
+        version: 5,
         fetchedAt: Date.now() / 1000,
         models: [{ id: "glm-5.3", name: "GLM", claude: true, context: 202752 }],
       }),
@@ -239,7 +239,7 @@ test("claude respects a user's explicit context limit instead of the catalog", (
   fs.writeFileSync(
     path.join(config, "catalog.json"),
     JSON.stringify({
-      version: 4,
+      version: 5,
       fetchedAt: Date.now() / 1000,
       models: [{ id: "glm-5.3", name: "GLM", claude: true, context: 202752 }],
     }),
@@ -262,7 +262,7 @@ test("claude gets no invented context limit for missing metadata or native Claud
     fs.writeFileSync(
       path.join(config, "catalog.json"),
       JSON.stringify({
-        version: 4,
+        version: 5,
         fetchedAt: Date.now() / 1000,
         models: [
           {
@@ -297,7 +297,7 @@ test("claude's picker includes every compatible model beyond the former shortlis
   fs.writeFileSync(
     path.join(config, "catalog.json"),
     JSON.stringify({
-      version: 4,
+      version: 5,
       fetchedAt: Date.now() / 1000,
       models: [
         ...models,

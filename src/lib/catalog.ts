@@ -1,5 +1,11 @@
 import { EFFORTS } from "./model-metadata.js";
-import type { Environment, HarnessId, Model, ModelCost } from "./types.js";
+import type {
+  Environment,
+  HarnessId,
+  Model,
+  ModelCost,
+  TokenPrices,
+} from "./types.js";
 import { isRecord, record, positiveTokens } from "./validation.js";
 import path from "node:path";
 
@@ -74,20 +80,19 @@ const support = (provider: Record<string, unknown>, kind: string) =>
 const effortMap = (provider: Record<string, unknown>) =>
   record(support(provider, "reasoning").effort);
 
-// A provider's token prices, converted to dollars per million tokens.
-function costOf(provider: Record<string, unknown>): ModelCost | null {
-  const list = provider.pricing;
-  const tokens = record(Array.isArray(list) ? record(list[0]).tokens : null);
-  const perMillion = (entry: unknown) => {
-    const { price, units } = record(entry);
-    const usd = record(price).USD;
-    return typeof usd === "number" &&
-      typeof units === "number" &&
-      usd >= 0 &&
-      units > 0
-      ? (usd / units) * 1_000_000
-      : null;
-  };
+const perMillion = (entry: unknown) => {
+  const { price, units } = record(entry);
+  const usd = record(price).USD;
+  return typeof usd === "number" &&
+    typeof units === "number" &&
+    usd >= 0 &&
+    units > 0
+    ? (usd / units) * 1_000_000
+    : null;
+};
+
+function prices(tier: Record<string, unknown>): TokenPrices | null {
+  const tokens = record(tier.tokens);
   const input = perMillion(tokens.input);
   const output = perMillion(tokens.output);
   if (input === null || output === null) return null;
@@ -100,12 +105,76 @@ function costOf(provider: Record<string, unknown>): ModelCost | null {
   };
 }
 
+// The keys of a pricing condition other than its human description.
+const conditionKeys = (tier: Record<string, unknown>) =>
+  Object.keys(record(tier.condition)).filter((key) => key !== "description");
+
+// A provider's prices in dollars per million tokens. The base is the standard
+// tier: no condition, or only a scheduled change that has already started.
+// Opt-in tiers (fast, priority, peak hours) are left out; input-size tiers are
+// kept so tools that support them can price long requests correctly.
+function costOf(provider: Record<string, unknown>): ModelCost | null {
+  const list = Array.isArray(provider.pricing)
+    ? provider.pricing.map(record)
+    : [];
+  const now = Date.now();
+  const startsAt = (tier: Record<string, unknown>) => {
+    const value = record(tier.condition).date_gte;
+    return typeof value === "number" ? value : 0;
+  };
+  const standard = list
+    .filter((tier) => conditionKeys(tier).every((key) => key === "date_gte"))
+    .filter((tier) => startsAt(tier) <= now)
+    .sort((a, b) => startsAt(a) - startsAt(b))
+    .at(-1);
+  const base = standard ? prices(standard) : null;
+  if (!base) return null;
+  const tiers = list.flatMap((tier) => {
+    const keys = conditionKeys(tier);
+    const size = record(tier.condition).input_gte;
+    const tierPrices = prices(tier);
+    return keys.length === 1 &&
+      keys[0] === "input_gte" &&
+      typeof size === "number" &&
+      size > 0 &&
+      tierPrices
+      ? [{ ...tierPrices, inputTokensAbove: size - 1 }]
+      : [];
+  });
+  return tiers.length ? { ...base, tiers } : base;
+}
+
 function savedCost(value: unknown): ModelCost | null {
   const cost = record(value);
-  const fields = [cost.input, cost.output, cost.cacheRead, cost.cacheWrite];
-  return fields.every((n) => typeof n === "number" && n >= 0)
-    ? (cost as unknown as ModelCost)
-    : null;
+  const valid = (entry: Record<string, unknown>) =>
+    [entry.input, entry.output, entry.cacheRead, entry.cacheWrite].every(
+      (n) => typeof n === "number" && n >= 0,
+    );
+  if (!valid(cost)) return null;
+  const base = {
+    input: cost.input as number,
+    output: cost.output as number,
+    cacheRead: cost.cacheRead as number,
+    cacheWrite: cost.cacheWrite as number,
+  };
+  const tiers = Array.isArray(cost.tiers)
+    ? cost.tiers
+        .map(record)
+        .filter(
+          (tier) =>
+            valid(tier) &&
+            typeof tier.inputTokensAbove === "number" &&
+            tier.inputTokensAbove > 0,
+        )
+        .map((tier) => ({
+          input: tier.input as number,
+          output: tier.output as number,
+          cacheRead: tier.cacheRead as number,
+          cacheWrite: tier.cacheWrite as number,
+          inputTokensAbove: tier.inputTokensAbove as number,
+        }))
+    : [];
+  return tiers.length ? { ...base, tiers } : base;
 }
 
 function model(fields: Record<string, unknown>): Model {
@@ -239,9 +308,10 @@ export async function fetchCatalog({
     cached = {};
   }
   // A cache written by another format version is not trustworthy, online or off.
-  // Version 3 differs only by lacking prices, so it is a fallback but never fresh.
-  const current = cached.version === 4;
-  const usable = current || cached.version === 3;
+  // Versions 3 and 4 differ only in prices (none, or the wrong tier), so they
+  // are a fallback but never fresh.
+  const current = cached.version === 5;
+  const usable = current || cached.version === 3 || cached.version === 4;
   const saved =
     usable && Array.isArray(cached.models)
       ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
@@ -268,7 +338,7 @@ export async function fetchCatalog({
   }
   // The list is good even when it cannot be saved (read-only or full disk).
   try {
-    writeJson(file, { version: 4, fetchedAt: Date.now() / 1000, models });
+    writeJson(file, { version: 5, fetchedAt: Date.now() / 1000, models });
   } catch {
     /* The next run fetches again. */
   }

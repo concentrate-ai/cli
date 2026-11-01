@@ -75,7 +75,7 @@ function fixture() {
     env,
   );
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
-    version: 4,
+    version: 5,
     fetched_at: Date.now(),
     models,
   });

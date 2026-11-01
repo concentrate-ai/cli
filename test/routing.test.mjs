@@ -115,7 +115,7 @@ for (const harness of Object.keys(DEFAULT_MODELS)) {
         CONCENTRATE_API_KEY: "sk-test",
       };
       writeJson(path.join(dir, "catalog.json"), {
-        version: 4,
+        version: 5,
         fetchedAt: Date.now() / 1000,
         models,
       });

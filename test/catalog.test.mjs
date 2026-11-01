@@ -168,7 +168,7 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 4,
+    version: 5,
     fetchedAt: Date.now() / 1000,
     models: [
       null,
@@ -268,7 +268,7 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
   const dir = tempDir();
   const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
-    version: 4,
+    version: 5,
     fetchedAt: 9e12,
     models: [{ id: "stale-model" }],
   });
@@ -354,4 +354,45 @@ test("a cache from before prices is still used offline, but refreshed when onlin
     ["old-model"],
   );
   assert.equal(models[0].cost, null);
+});
+
+test("prices come from the standard tier, with input-size tiers kept for Pi", () => {
+  const tier = (condition, input, output) => ({
+    ...(condition ? { condition } : {}),
+    tokens: {
+      input: { price: { USD: input }, units: 1000000 },
+      output: { price: { USD: output }, units: 1000000 },
+      cache: { read: { price: { USD: input / 10 }, units: 1000000 } },
+    },
+  });
+  const now = Date.now();
+  const entry = summarize({
+    id: "m",
+    name: "M",
+    providers: {
+      p: {
+        provider_slug: "p",
+        pricing: [
+          tier({ service_tier: "fast" }, 8, 40),
+          tier({ input_gte: 200000 }, 6, 30),
+          tier({ date_gte: now + 86400000 }, 9, 9),
+          tier({ date_gte: now - 86400000, description: "new price" }, 5, 25),
+          tier(null, 4, 20),
+        ],
+      },
+    },
+  });
+  assert.equal(entry.cost.input, 5, "the scheduled price that has started");
+  assert.equal(entry.cost.output, 25);
+  assert.deepEqual(entry.cost.tiers, [
+    {
+      input: 6,
+      output: 30,
+      cacheRead: 0.6,
+      cacheWrite: 0,
+      inputTokensAbove: 199999,
+    },
+  ]);
+  const pi = piConfig("https://x", [entry]).providers.concentrate.models[0];
+  assert.deepEqual(pi.cost.tiers, entry.cost.tiers);
 });

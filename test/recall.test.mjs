@@ -38,7 +38,7 @@ function rig({ catalog = true } = {}) {
   const codexHome = tempDir("cn-codex-");
   if (catalog)
     writeJson(path.join(config, "catalog.json"), {
-      version: 4,
+      version: 5,
       fetchedAt: Date.now() / 1000,
       models: CATALOG,
     });

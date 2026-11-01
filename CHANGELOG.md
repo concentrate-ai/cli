@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 (2026-11-01)
+
+- Pi and OpenCode cost estimates use each model's standard price. 0.1.1 took
+  the first price listed, which for some models (such as Claude Opus 5.5) is
+  the fast tier, so estimates showed double. Pi also gets the higher price for
+  very long inputs where a model has one. Billing was never affected.
+
 ## 0.1.1 (2026-11-01)
 
 - **Claude models in Pi and OpenCode now use prompt caching.** `cn` set both up
