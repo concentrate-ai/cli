@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 (2026-11-02)
+
+- Pi and OpenCode cost estimates include cache-write prices for GPT-5.6,
+  GPT-6, GPT-6.1, and Kimi K3 on Moonshot, which showed $0 before. Billing was
+  not affected; the Concentrate dashboard shows actual charges.
+
 ## 0.1.3 (2026-11-02)
 
 - **Auto mode checks run on your model.** In `cn claude`, non-Claude models now
