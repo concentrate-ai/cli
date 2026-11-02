@@ -1,12 +1,34 @@
 import { appHeaders } from "../app-headers.js";
 import { record } from "../validation.js";
 import type { Harness, Environment, Model } from "../types.js";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import { API_ROOT } from "../catalog.js";
+import { CnError } from "../errors.js";
 import { piConfig } from "../pickers.js";
+
+function piVersion(executable: string) {
+  const out = spawnSync(executable, ["--version"], {
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  // Older Pi prints its version to stderr.
+  return (out.stdout || out.stderr || "").trim().split("\n")[0] || null;
+}
+
+// cn writes apiKey as "$NAME", which Pi reads as an environment variable from
+// 0.77 on. Older Pi sends it literally and gets a 401.
+export function requireSupportedPi(executable: string) {
+  const found = piVersion(executable);
+  const match = /^(\d+)\.(\d+)\./.exec(found ?? "");
+  if (match && Number(match[1]) === 0 && Number(match[2]) < 77)
+    throw new CnError(
+      `cn needs Pi 0.77 or newer (you have ${found}). Run \`pi update self\`, then try again.`,
+    );
+}
 
 // Written by cn for each run, or deliberately kept out of the temporary profile.
 // Everything else in the Pi agent dir (extensions, skills, MCP config, caches)
@@ -91,8 +113,10 @@ const adapter: Harness = {
   installHint:
     "Install Pi and make sure `pi` is on your PATH, then run cn pi again.",
   modelFlags: ["--model", "--provider"],
+  version: piVersion,
 
-  async prepare({ model, key, available, forwarded, env }) {
+  async prepare({ executable, model, key, available, forwarded, env }) {
+    requireSupportedPi(executable);
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "cn-pi-"));
     const cleanup = () =>
       fs.rmSync(directory, { recursive: true, force: true });

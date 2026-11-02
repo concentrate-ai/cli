@@ -23,11 +23,19 @@ export function tempDir(prefix = "cn-test-") {
 }
 
 // A stand-in tool that records argv and selected env vars, then exits with `exitCode`.
-export function fakeTool(directory, name, { exitCode = 0 } = {}) {
+export function fakeTool(
+  directory,
+  name,
+  { exitCode = 0, version, versionOnStderr = false } = {},
+) {
   const record = path.join(directory, `${name}.record.json`);
   const script = `#!/usr/bin/env node
 const fs = require("node:fs");
 const path = require("node:path");
+if (${JSON.stringify(version ?? null)} && process.argv[2] === "--version") {
+  (${JSON.stringify(versionOnStderr)} ? console.error : console.log)(${JSON.stringify(version ?? "")});
+  process.exit(0);
+}
 // Minimal offline stand-in for the plugin install protocol observed in Claude 2.1.308.
 if (${JSON.stringify(name)} === "claude" && process.argv[2] === "plugin" && process.argv[3] === "install") {
   const market = process.argv[process.argv.indexOf("--marketplace") + 1];

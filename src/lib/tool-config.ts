@@ -29,6 +29,7 @@ import { CnError } from "./errors.js";
 import { which } from "./executables.js";
 import { getHarness } from "./harnesses/registry.js";
 import { supportsStandalone } from "./harnesses/opencode.js";
+import { requireSupportedPi } from "./harnesses/pi.js";
 import {
   CLAUDE_BLANKED,
   claudeSettings,
@@ -170,6 +171,7 @@ export async function configureTool(
     throw new CnError(
       `${adapter.label} is not installed. ${adapter.installHint}`,
     );
+  if (id === "pi") requireSupportedPi(executable);
   // Native apps need a saved key; environment-only keys are unavailable from the Dock.
   const key = readStoredKey(env);
   if (!key)

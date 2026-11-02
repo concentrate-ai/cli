@@ -437,6 +437,26 @@ test("pi runs against a temporary agent dir that is removed afterwards", () => {
   assert.deepEqual(seen.args.slice(-2), ["-p", "hi"]);
 });
 
+test("pi refuses versions before 0.77 and asks for an update", () => {
+  const { bin, env } = setup();
+  fakeTool(bin, "pi", { version: "0.76.2", versionOnStderr: true });
+  const result = runCn(["pi", "--", "-p", "hi"], { env });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Pi 0\.77 or newer/);
+  assert.match(result.stderr, /pi update self/);
+  assert.equal(fs.existsSync(path.join(bin, "pi.record.json")), false);
+});
+
+test("pi launches on 0.77 and later", () => {
+  for (const version of ["0.77.0", "0.87.1", "1.0.0"]) {
+    const { bin, env } = setup();
+    const record = fakeTool(bin, "pi", { version });
+    const result = runCn(["pi", "--", "-p", "hi"], { env });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(record().args.slice(-2), ["-p", "hi"]);
+  }
+});
+
 test("pi keeps the user's settings and never copies auth.json", () => {
   const { bin, env } = setup();
   const source = tempDir("cn-pi-src-");

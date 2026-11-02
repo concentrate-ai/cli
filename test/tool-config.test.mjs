@@ -261,6 +261,16 @@ test("bad JSON, symlinks, and environment-only keys fail without changing native
   );
 });
 
+test("pi: Configure refuses versions before 0.77 without writing", async () => {
+  const env = fixture();
+  fakeTool(path.join(env.HOME, "bin"), "pi", {
+    version: "0.76.2",
+    versionOnStderr: true,
+  });
+  await assert.rejects(configureTool("pi", env), /pi update self/);
+  assert.equal(fs.existsSync(toolConfigPaths("pi", env).catalog), false);
+});
+
 test("OpenCode JSONC comments and other providers survive Configure and Reset", async () => {
   const env = fixture();
   const dir = path.join(env.XDG_CONFIG_HOME, "opencode");
