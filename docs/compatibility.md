@@ -36,7 +36,7 @@ Remembering a model you switched to inside OpenCode is not supported, because Op
 
 ## Classifier behavior
 
-For GLM sessions, cn selects the same GLM model for the auto-mode classifier unless you override `CLAUDE_CODE_AUTO_MODE_MODEL`. This setting is chosen at launch and does not follow in-session model switches. The experiments and limitations are documented in [research notes](../research/README.md).
+For non-Claude sessions, cn selects the session model for the auto-mode classifier unless you override `CLAUDE_CODE_AUTO_MODE_MODEL`. This setting is chosen at launch and does not follow in-session model switches. The experiments and limitations are documented in [research notes](../research/README.md).
 
 ## Pi model capabilities
 

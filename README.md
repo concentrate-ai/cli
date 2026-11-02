@@ -72,7 +72,8 @@ while you run through `cn`.
 - Use Claude models or any other model Concentrate offers for Claude Code.
 - **Auto mode safety checks:** with Claude models, the classifier requests that
   check actions in auto mode are free. With other models, those checks run on the
-  model you are using and are charged for that model.
+  model you are using and are charged for that model. Set
+  `CLAUDE_CODE_AUTO_MODE_MODEL` to use a different model for them.
 - Context window, output limits, and reasoning effort follow the model you pick,
   including when you switch models during a session. This needs Claude Code
   2.1.287 or newer.

@@ -61,13 +61,11 @@ const adapter: Harness = {
     // A resumed session already has an ID, so nothing is remembered for it.
     const sessionId = resumes(forwarded) ? null : randomUUID();
     // The key travels in the child's environment only, under a name only cn's helper reads.
-    // Match GLM coding sessions with GLM classification, as requested. The
-    // caller can choose a different classifier explicitly. Requires 2.1.302+.
+    // Non-Claude sessions run auto mode checks on their own model, not Claude
+    // Code's default. The caller can choose another explicitly. Needs 2.1.302+.
     const classifierModel =
       env.CLAUDE_CODE_AUTO_MODE_MODEL ||
-      ((model.split("/").pop() ?? model).startsWith("glm-")
-        ? model
-        : undefined);
+      (/claude-/i.test(model) ? undefined : model);
     // Seed the startup window, then a session-only mod follows model switches.
     // An explicit user override stays fixed and takes priority.
     const catalogModel =

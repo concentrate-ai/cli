@@ -162,8 +162,14 @@ test("claude gets Concentrate in its child environment and forwards args after -
   );
 });
 
-test("claude launches GLM with the same classifier, including provider-pinned models", () => {
-  for (const model of ["glm-5.3", "glm-5.3-flash", "zai/glm-5.3"]) {
+test("claude launches non-Claude models with the same classifier, including provider-pinned models", () => {
+  for (const model of [
+    "glm-5.3",
+    "glm-5.3-flash",
+    "zai/glm-5.3",
+    "gpt-6-luna",
+    "openai/gpt-6-luna",
+  ]) {
     const { bin, env } = setup();
     const record = fakeTool(bin, "claude");
     const result = runCn(["claude", "--model", model], { env });
@@ -178,7 +184,7 @@ test("claude launches GLM with the same classifier, including provider-pinned mo
   }
 });
 
-test("claude preserves an explicit classifier choice when launching GLM", () => {
+test("claude preserves an explicit classifier choice when launching a non-Claude model", () => {
   const { bin, env } = setup({
     CLAUDE_CODE_AUTO_MODE_MODEL: "claude-sonnet-5",
   });
@@ -193,7 +199,7 @@ test("claude preserves an explicit classifier choice when launching GLM", () => 
   );
 });
 
-test("claude leaves classifier selection alone for other model families", () => {
+test("claude leaves classifier selection alone for Claude models", () => {
   const { bin, env } = setup();
   const record = fakeTool(bin, "claude");
   const result = runCn(["claude", "--model", "claude-sonnet-5"], { env });
