@@ -97,11 +97,17 @@ function prices(tier: Record<string, unknown>): TokenPrices | null {
   const output = perMillion(tokens.output);
   if (input === null || output === null) return null;
   const cache = record(tokens.cache);
+  // Claude lists 5-minute and 1-hour write prices; other models list one
+  // under another name, such as cache_write_tokens.
+  const writes = record(cache.write);
   return {
     input,
     output,
     cacheRead: perMillion(cache.read) ?? 0,
-    cacheWrite: perMillion(record(cache.write).ephemeral_5m_input_tokens) ?? 0,
+    cacheWrite:
+      perMillion(writes.ephemeral_5m_input_tokens) ??
+      perMillion(Object.values(writes)[0]) ??
+      0,
   };
 }
 

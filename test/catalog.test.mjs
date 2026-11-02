@@ -336,6 +336,40 @@ test("catalog prices become dollars per million tokens for Pi", () => {
   assert.equal(summarize({ id: "n", name: "N" }).cost, null);
 });
 
+test("cache-write prices are read under any field name, preferring Claude's 5-minute price", () => {
+  const withWrite = (write) =>
+    summarize({
+      id: "m",
+      name: "M",
+      providers: {
+        p: {
+          provider_slug: "p",
+          pricing: [
+            {
+              tokens: {
+                input: { price: { USD: 2 }, units: 1000000 },
+                output: { price: { USD: 10 }, units: 1000000 },
+                cache: { read: { price: { USD: 0.1 }, units: 1000000 }, write },
+              },
+            },
+          ],
+        },
+      },
+    }).cost.cacheWrite;
+  assert.equal(
+    withWrite({ cache_write_tokens: { price: { USD: 2.5 }, units: 1000000 } }),
+    2.5,
+  );
+  assert.equal(
+    withWrite({
+      ephemeral_1h_input_tokens: { price: { USD: 4 }, units: 1000000 },
+      ephemeral_5m_input_tokens: { price: { USD: 2.5 }, units: 1000000 },
+    }),
+    2.5,
+  );
+  assert.equal(withWrite(undefined), 0);
+});
+
 test("a cache from before prices is still used offline, but refreshed when online", async () => {
   const config = tempDir("cn-catalog-v3-");
   const env = { CN_CONFIG_HOME: config, CN_OFFLINE: "1" };
