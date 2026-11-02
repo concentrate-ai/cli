@@ -113,7 +113,12 @@ command line share `~/.codex/config.toml`.
 **Claude models show 0% cache hits, or cost far more than expected**
 Before 0.1.1, `cn` set up Pi and OpenCode on Chat Completions, where Concentrate
 does not cache Claude prompts, so each turn paid the full input price. Install
-the latest `cn`; it moves both to the Responses API, where caching works.
+the latest `cn`; it sends Claude to Concentrate's Messages API, where the cache
+grows with the conversation, and other models to the Responses API.
+
+**Pi returns 401 Invalid API key under `cn pi`**
+`cn` needs Pi 0.77 or newer, which reads the key from the environment as `cn`
+writes it. Run `pi update self`, then try again.
 
 Cursor can only reach Concentrate through Chat Completions, so Claude models in
 Cursor are not cached. Use `cn claude` for Claude models.

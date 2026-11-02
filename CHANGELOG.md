@@ -1,13 +1,24 @@
 # Changelog
 
+## 0.1.3 (2026-11-02)
+
+- **Auto mode checks run on your model.** In `cn claude`, non-Claude models now
+  check auto mode actions with the model you picked, as GLM already did, instead
+  of Claude Code's default Claude model. Claude models keep the free
+  server-side checks. Set `CLAUDE_CODE_AUTO_MODE_MODEL` to choose another model.
+- `cn pi` and `cn configure pi` need Pi 0.77 or newer and say so, instead of
+  failing with 401 Invalid API key. Run `pi update self` to update.
+- OpenCode 1.x now sees which models support tools. Models also list PDF input
+  where supported and carry their release date.
+
 ## 0.1.2 (2026-11-01)
 
 - **Full prompt caching for Claude in Pi and OpenCode.** Claude models now go
   through Concentrate's Messages endpoint, where the cache grows with the
   conversation. On the Responses endpoint the cache fell behind during long
   tool loops, so earlier tool results were billed again at the cache-write
-  price. On a long agent task this took the cache hit rate from about 40% to
-  over 80%. Other models stay on Responses, where they already cache well.
+  price. On a long agent task this raised the cache hit rate from about 82% to
+  about 92%. Other models stay on Responses, where they already cache well.
 - Pi and OpenCode cost estimates use each model's standard price. 0.1.1 took
   the first price listed, which for some models (such as Claude Opus 5.5) is
   the fast tier, so estimates showed double. Pi also gets the higher price for
