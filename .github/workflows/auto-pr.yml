@@ -1,0 +1,23 @@
+name: Auto PR
+# Opens a PR into dev on the first push of a branch that has commits ahead of it.
+on:
+  push:
+    branches-ignore: [main, dev]
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          set -eu
+          if [ "$(gh pr list --repo "$REPO" --head "$BRANCH" --state open --json number --jq length)" != 0 ]; then exit 0; fi
+          if [ "$(gh api "repos/$REPO/compare/dev...$BRANCH" --jq .ahead_by)" = 0 ]; then exit 0; fi
+          TITLE="${TITLE%%$'\n'*}"
+          gh pr create --repo "$REPO" --base dev --head "$BRANCH" --title "${TITLE:-$BRANCH}" --body "Auto-opened on push of \`$BRANCH\`."
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          TITLE: ${{ github.event.head_commit.message }}
