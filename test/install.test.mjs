@@ -10,6 +10,19 @@ import { fakeTool, tempDir } from "./helpers.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
+// Source installs build in place, so each runs from its own copy of the checkout.
+function checkout(dir) {
+  const copy = path.join(dir, "checkout");
+  fs.cpSync(root, copy, {
+    recursive: true,
+    filter: (source) =>
+      !["node_modules", "dist", "release", ".git"].includes(
+        path.basename(source),
+      ),
+  });
+  return copy;
+}
+
 test("source install produces a self-contained CLI and launches all four adapters", () => {
   const dir = tempDir("cn-ts-install-");
   const home = path.join(dir, "home with spaces");
@@ -26,11 +39,15 @@ test("source install produces a self-contained CLI and launches all four adapter
     CONCENTRATE_API_KEY: "sk-test",
     PI_CODING_AGENT_DIR: path.join(dir, "pi"),
   };
-  const installed = spawnSync("bash", [path.join(root, "install.sh")], {
-    env,
-    encoding: "utf8",
-    timeout: 30000,
-  });
+  const installed = spawnSync(
+    "bash",
+    [path.join(checkout(dir), "install.sh")],
+    {
+      env,
+      encoding: "utf8",
+      timeout: 30000,
+    },
+  );
   assert.equal(installed.status, 0, installed.stderr);
   const runtime = path.join(data, "concentrate-cli");
   assert.equal(fs.existsSync(path.join(runtime, "node_modules")), false);
@@ -83,4 +100,20 @@ test("source install produces a self-contained CLI and launches all four adapter
     assert.equal(result.status, 0, `${name}: ${result.stderr}`);
     assert.ok(record().args.length || name === "opencode");
   }
+});
+
+test("a source checkout without pnpm fails before anything is installed", () => {
+  const dir = tempDir("cn-ts-install-");
+  const bin = path.join(dir, "bin");
+  fs.mkdirSync(bin);
+  fs.symlinkSync(process.execPath, path.join(bin, "node"));
+  const data = path.join(dir, "data");
+  const result = spawnSync("bash", [path.join(root, "install.sh")], {
+    env: { PATH: `${bin}:/usr/bin:/bin`, HOME: dir, XDG_DATA_HOME: data },
+    encoding: "utf8",
+    timeout: 30000,
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /pnpm is required/);
+  assert.equal(fs.existsSync(path.join(data, "concentrate-cli")), false);
 });

@@ -1,5 +1,5 @@
 // Resume installed clients through a localhost mock using synthetic keys and isolated homes.
-// Run after npm run build; optionally pass codex, pi, or opencode to limit the probe.
+// Run after pnpm build; optionally pass codex, pi, or opencode to limit the probe.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";

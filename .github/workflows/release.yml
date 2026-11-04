@@ -9,13 +9,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run check
-      - run: npm run release:pack
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm check
+      - run: pnpm release:pack
         env:
           RELEASE_TAG: ${{ github.ref_name }}
       - name: Publish checked release assets

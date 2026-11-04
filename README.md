@@ -28,7 +28,7 @@ cn
 ```
 
 The installer checks a SHA-256 checksum and puts `cn` in `~/.local/bin`. Prefer
-to build it yourself? Clone this repository, then run `npm ci` and `./install.sh`.
+to build it yourself? Clone this repository, then run `./install.sh`.
 
 ## Updating
 

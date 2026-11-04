@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the Concentrate AI CLI (`cn`). Runs on Node.js 22.13+. Source checkouts need npm to build.
+# Installs the Concentrate AI CLI (`cn`). Runs on Node.js 22.13+. Source checkouts need pnpm to build.
 #   From a checkout:   ./install.sh
 #   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | bash
 # Piped from the web, downloads a built, checksummed release from GitHub Releases.
@@ -151,18 +151,15 @@ locate_package
 
 # Release packages contain dist; source checkouts compile before replacing an install.
 if [[ -f "$package_dir/src/bin/cn.ts" ]]; then
-  command -v npm >/dev/null 2>&1 || { echo "npm is required to build this source checkout." >&2; exit 1; }
+  command -v pnpm >/dev/null 2>&1 || { echo "pnpm is required to build this source checkout." >&2; exit 1; }
   (
     cd "$package_dir"
-    # Reinstall when a tool is missing or the lockfile moved on.
-    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser || ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
-      npm ci --include=dev --ignore-scripts
-    fi
-    npm run build
+    pnpm install --frozen-lockfile
+    pnpm build
   )
 fi
 if [[ ! -f "$package_dir/dist/bin/cn.js" ]]; then
-  echo "The package does not contain a built CLI. Run npm ci and npm run build." >&2
+  echo "The package does not contain a built CLI. Run pnpm install and pnpm build." >&2
   exit 1
 fi
 

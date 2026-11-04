@@ -6,20 +6,20 @@ checksum before installing, so no website hosting is needed.
 
 ## Cut a release
 
-1. Set `version` in `package.json` (and `package-lock.json`), add a `## <version>`
+1. Set `version` in `package.json`, add a `## <version>`
    section to `CHANGELOG.md` with a few short bullets, and merge to `main`. The
    section becomes the GitHub release notes and what `cn update` prints; the
    release build fails without it.
 2. Check locally:
 
    ```sh
-   npm ci
-   npm run check
-   npm run release:pack
+   pnpm install
+   pnpm check
+   pnpm release:pack
    ```
 
    `release:pack` creates `release/concentrate-cli.tar.gz`, `release/SHA256SUMS`,
-   and `release/install.sh`. Customers need Node.js 22.13+, but not npm or a
+   and `release/install.sh`. Customers need Node.js 22.13+, but not pnpm or a
    source checkout.
 
 3. Tag and push. The tag must match the version:

@@ -1,20 +1,20 @@
 # Development
 
 The CLI is written in strict TypeScript. TOML and JSONC parsers are bundled at build time; the installed CLI needs Node.js and no `node_modules`. TypeScript, esbuild, ESLint, Prettier, and the parser packages are development dependencies only. Bundled parser licenses are included in the generated module.
-Use Node.js 22.13+ and npm.
+Use Node.js 22.13+ and pnpm.
 
 ```sh
-npm ci
-npm run check
+pnpm install
+pnpm check
 ```
 
-`check` runs strict type checking, linting, formatting verification, and the regression suite. `npm run build` compiles `src/` into `dist/` and bundles the configuration parsers; tests and compatibility probes use that compiled output. Run `npm run format` after edits. A failed compilation emits no new JavaScript.
+`check` runs strict type checking, linting, formatting verification, and the regression suite. `pnpm build` compiles `src/` into `dist/` and bundles the configuration parsers; tests and compatibility probes use that compiled output. Run `pnpm format` after edits. A failed compilation emits no new JavaScript.
 
 The source layout keeps shared contracts in `src/lib/types.ts` and harness configuration contracts in `src/lib/harness-config.ts`. Catalog and file input pass through runtime guards in `validation.ts`; TypeScript types alone do not validate JSON. Effort definitions and selection rules live in `model-metadata.ts`. Each adapter implements the same `Harness` contract.
 
 Claude's portable mod uses `.mts` source, which compiles to `.mjs` because the generated hook runs outside this package's module boundary. Its type-only host contract is erased from the emitted code.
 
-The installer builds source checkouts before replacing an installation. Built release packages need only `dist/`, `package.json`, and `install.sh`; they do not need npm or a compiler. `dist/` is generated and ignored by Git.
+The installer builds source checkouts before replacing an installation. Built release packages need only `dist/`, `package.json`, and `install.sh`; they do not need pnpm or a compiler. `dist/` is generated and ignored by Git.
 
 To check Claude Code integration against an installed client:
 

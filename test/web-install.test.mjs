@@ -40,8 +40,8 @@ function fixture() {
     { mode: 0o755 },
   );
   fs.writeFileSync(
-    path.join(bin, "npm"),
-    '#!/bin/sh\necho "Unexpected npm build" >&2\nexit 99\n',
+    path.join(bin, "pnpm"),
+    '#!/bin/sh\necho "Unexpected pnpm build" >&2\nexit 99\n',
     { mode: 0o755 },
   );
   const env = {
@@ -78,7 +78,7 @@ function fixture() {
     runtime: path.join(env.XDG_DATA_HOME, "concentrate-cli"),
   };
 }
-test("piped web install verifies a built release, needs no npm, preserves credentials and supports pinned releases", () => {
+test("piped web install verifies a built release, needs no pnpm, preserves credentials and supports pinned releases", () => {
   const f = fixture();
   const result = f.run({ CN_INSTALL_VERSION: "0.1.0" });
   assert.equal(result.status, 0, result.stderr);
