@@ -1,12 +1,11 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
-import { summarize } from "../dist/lib/catalog.js";
-import { writeJson, writePreferences } from "../dist/lib/settings.js";
-import { fakeTool, tempDir } from "./helpers.mjs";
+import { test, expect } from "vitest";
+import { summarize } from "../src/lib/catalog.js";
+import { writeJson, writePreferences } from "../src/lib/settings.js";
+import { fakeTool, tempDir } from "./helpers.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -48,23 +47,21 @@ test("source install produces a self-contained CLI and launches all four adapter
       timeout: 30000,
     },
   );
-  assert.equal(installed.status, 0, installed.stderr);
+  expect(installed.status, installed.stderr).toBe(0);
   const runtime = path.join(data, "concentrate-cli");
-  assert.equal(fs.existsSync(path.join(runtime, "node_modules")), false);
-  assert.equal(fs.existsSync(path.join(runtime, "src")), false);
-  assert.equal(
+  expect(fs.existsSync(path.join(runtime, "node_modules"))).toBe(false);
+  expect(fs.existsSync(path.join(runtime, "src"))).toBe(false);
+  expect(
     fs.existsSync(path.join(runtime, "dist/lib/claude-context/register.mjs")),
-    true,
-  );
+  ).toBe(true);
   const cn = path.join(home, ".local/bin/cn");
   const run = (args) =>
     spawnSync(cn, args, { env, encoding: "utf8", timeout: 10000 });
-  assert.equal(
-    run(["--version"]).stdout.trim(),
+  expect(run(["--version"]).stdout.trim()).toBe(
     JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url)))
       .version,
   );
-  assert.match(run(["--help"]).stdout, /claude, codex, opencode, pi/);
+  expect(run(["--help"]).stdout).toMatch(/claude, codex, opencode, pi/);
   const models = ["small", "large"].map((id) =>
     summarize({
       id,
@@ -97,8 +94,8 @@ test("source install produces a self-contained CLI and launches all four adapter
   for (const name of ["claude", "codex", "opencode", "pi"]) {
     const record = fakeTool(bin, name);
     const result = run([name]);
-    assert.equal(result.status, 0, `${name}: ${result.stderr}`);
-    assert.ok(record().args.length || name === "opencode");
+    expect(result.status, `${name}: ${result.stderr}`).toBe(0);
+    expect(record().args.length || name === "opencode").toBeTruthy();
   }
 });
 
@@ -113,7 +110,7 @@ test("a source checkout without pnpm fails before anything is installed", () => 
     encoding: "utf8",
     timeout: 30000,
   });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /pnpm is required/);
-  assert.equal(fs.existsSync(path.join(data, "concentrate-cli")), false);
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/pnpm is required/);
+  expect(fs.existsSync(path.join(data, "concentrate-cli"))).toBe(false);
 });

@@ -1,12 +1,11 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   clearForeignRequestIds,
   repairClaudeSessions,
-} from "../dist/lib/claude-session-repair.js";
-import { tempDir } from "./helpers.mjs";
+} from "../src/lib/claude-session-repair.js";
+import { tempDir } from "./helpers.js";
 
 const id = "410110a1-cb69-4cb7-b56e-c570abba102b";
 const rows = [
@@ -27,11 +26,11 @@ const text = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
 test("remove only foreign diagnostic anchors and preserve message content", () => {
   const result = clearForeignRequestIds(text);
   const parsed = result.text.trim().split("\n").map(JSON.parse);
-  assert.equal(result.count, 1);
-  assert.equal(parsed[1].requestId, "native-log");
-  assert.equal(parsed[2].requestId, undefined);
-  assert.deepEqual(parsed[2].message, rows[2].message);
-  assert.deepEqual(parsed[0], rows[0]);
+  expect(result.count).toBe(1);
+  expect(parsed[1].requestId).toBe("native-log");
+  expect(parsed[2].requestId).toBe(undefined);
+  expect(parsed[2].message).toStrictEqual(rows[2].message);
+  expect(parsed[0]).toStrictEqual(rows[0]);
 });
 
 test("repairs only the ended session and keeps a private backup", () => {
@@ -45,19 +44,18 @@ test("repairs only the ended session and keeps a private backup", () => {
   fs.writeFileSync(path.join(profile, "cn-ended-sessions"), id + "\n");
   const file = path.join(dir, `${id}.jsonl`);
   fs.writeFileSync(file, text);
-  assert.equal(
+  expect(
     repairClaudeSessions({
       env: { CLAUDE_CONFIG_DIR: original, CN_CONFIG_HOME: config },
       profile,
     }),
-    1,
-  );
-  assert.equal(clearForeignRequestIds(fs.readFileSync(file, "utf8")).count, 0);
+  ).toBe(1);
+  expect(clearForeignRequestIds(fs.readFileSync(file, "utf8")).count).toBe(0);
   const backups = fs.readdirSync(path.join(config, "claude-session-backups"));
-  assert.equal(backups.length, 1);
+  expect(backups.length).toBe(1);
   const backup = path.join(config, "claude-session-backups", backups[0]);
-  assert.equal(fs.readFileSync(backup, "utf8"), text);
-  assert.equal(fs.statSync(backup).mode & 0o777, 0o600);
+  expect(fs.readFileSync(backup, "utf8")).toBe(text);
+  expect(fs.statSync(backup).mode & 0o777).toBe(0o600);
 });
 
 test("does not modify a session still open in another Claude process", () => {
@@ -75,12 +73,11 @@ test("does not modify a session still open in another Claude process", () => {
   fs.writeFileSync(path.join(profile, "cn-ended-sessions"), id + "\n");
   const file = path.join(dir, `${id}.jsonl`);
   fs.writeFileSync(file, text);
-  assert.equal(
+  expect(
     repairClaudeSessions({
       env: { CLAUDE_CONFIG_DIR: original, CN_CONFIG_HOME: root },
       profile,
     }),
-    0,
-  );
-  assert.equal(fs.readFileSync(file, "utf8"), text);
+  ).toBe(0);
+  expect(fs.readFileSync(file, "utf8")).toBe(text);
 });

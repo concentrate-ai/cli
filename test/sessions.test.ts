@@ -1,11 +1,10 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
-import { parseHarnessLaunchArgs } from "../dist/lib/cli.js";
-import { codexSessions, resolveSessionArgs } from "../dist/lib/sessions.js";
-import { getHarness } from "../dist/lib/harnesses/registry.js";
-import { runCn, tempDir } from "./helpers.mjs";
+import { test, expect } from "vitest";
+import { parseHarnessLaunchArgs } from "../src/lib/cli.js";
+import { codexSessions, resolveSessionArgs } from "../src/lib/sessions.js";
+import { getHarness } from "../src/lib/harnesses/registry.js";
+import { runCn, tempDir } from "./helpers.js";
 
 function rig() {
   const root = tempDir("cn-resume-test-");
@@ -75,21 +74,18 @@ test("resume and continue have consistent aliases for every CLI; -- preserves na
       ["continue"],
     ].entries())
       if (cases[index] === null)
-        assert.throws(() => parseHarnessLaunchArgs(target, args), /--session/);
+        expect(() => parseHarnessLaunchArgs(target, args)).toThrow(/--session/);
       else
-        assert.deepEqual(
-          parseHarnessLaunchArgs(target, args).forwarded,
+        expect(parseHarnessLaunchArgs(target, args).forwarded).toStrictEqual(
           cases[index],
         );
-    assert.deepEqual(
+    expect(
       parseHarnessLaunchArgs(target, ["--", "continue"]).forwarded,
-      ["continue"],
-    );
-    assert.equal(
+    ).toStrictEqual(["continue"]);
+    expect(
       parseHarnessLaunchArgs(target, ["--model", "chosen", "resume", "id"])
         .model,
-      "chosen",
-    );
+    ).toBe("chosen");
   }
 });
 
@@ -103,47 +99,42 @@ test("Codex discovery includes subscription/provider sessions and restricts cont
     "invalid",
   );
   fs.symlinkSync(original, path.join(path.dirname(original), "link.jsonl"));
-  assert.deepEqual(
-    codexSessions(env).map((s) => s.id),
-    ["subscription", "concentrate"],
-  );
+  expect(codexSessions(env).map((s) => s.id)).toStrictEqual([
+    "subscription",
+    "concentrate",
+  ]);
   const before = fs.readFileSync(original, "utf8");
-  assert.deepEqual(
+  expect(
     await resolveSessionArgs("codex", "unused", ["resume", "--last"], env),
-    ["resume", "subscription"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["resume", "subscription"]);
+  expect(
     await resolveSessionArgs(
       "codex",
       "unused",
       ["exec", "resume", "--last", "Continue work"],
       env,
     ),
-    ["exec", "resume", "subscription", "Continue work"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["exec", "resume", "subscription", "Continue work"]);
+  expect(
     await resolveSessionArgs(
       "codex",
       "unused",
       ["resume", "--last", "--all"],
       env,
     ),
-    ["resume", "other-project", "--all"],
-  );
-  assert.equal(fs.readFileSync(original, "utf8"), before);
+  ).toStrictEqual(["resume", "other-project", "--all"]);
+  expect(fs.readFileSync(original, "utf8")).toBe(before);
 });
 
 test("Codex resume fails when there are no local sessions", async () => {
   const { env } = rig();
-  await assert.rejects(
+  await expect(
     resolveSessionArgs("codex", "unused", ["resume", "--last"], env),
-    /No saved/,
-  );
+  ).rejects.toThrow(/No saved/);
   codex(env, "saved");
-  await assert.rejects(
+  await expect(
     resolveSessionArgs("codex", "unused", ["resume"], env),
-    /Choose a session/,
-  );
+  ).rejects.toThrow(/Choose a session/);
 });
 
 test("Pi handles resume and session paths itself", async () => {
@@ -155,7 +146,9 @@ test("Pi handles resume and session paths itself", async () => {
     ["--session", "/some/old/session.jsonl"],
     ["--session-dir", "/custom", "--resume"],
   ])
-    assert.deepEqual(await resolveSessionArgs("pi", "unused", args, env), args);
+    expect(await resolveSessionArgs("pi", "unused", args, env)).toStrictEqual(
+      args,
+    );
 });
 
 test("OpenCode explicit native session arguments do not invoke a cn picker", async () => {
@@ -165,10 +158,9 @@ test("OpenCode explicit native session arguments do not invoke a cn picker", asy
     ["--session", "ses_existing"],
     ["run", "--session", "ses_existing", "hello"],
   ])
-    assert.deepEqual(
+    expect(
       await resolveSessionArgs("opencode", "nonexistent", args, env),
-      args,
-    );
+    ).toStrictEqual(args);
 });
 
 function openCodeRig() {
@@ -202,23 +194,23 @@ test("OpenCode resume validates the session and switches its durable provider be
     ["opencode", "--model", "chosen", "resume", "ses_existing"],
     { env: rig.env },
   );
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const calls = rig.calls();
   const switchCall = calls.find((call) => call.args[0] === "api");
-  assert.ok(switchCall);
-  assert.deepEqual(JSON.parse(switchCall.args.at(-1)), {
+  expect(switchCall).toBeTruthy();
+  expect(JSON.parse(switchCall.args.at(-1))).toStrictEqual({
     model: { providerID: "concentrate", id: "chosen" },
   });
-  assert.deepEqual(calls.at(-1).args, [
+  expect(calls.at(-1).args).toStrictEqual([
     "--standalone",
     "--session",
     "ses_existing",
   ]);
-  assert.equal(JSON.parse(calls.at(-1).config).model, "concentrate/chosen");
-  assert.ok(
+  expect(JSON.parse(calls.at(-1).config).model).toBe("concentrate/chosen");
+  expect(
     !JSON.stringify(calls).includes("sk-test"),
     "key must not be placed in argv or inline config",
-  );
+  ).toBeTruthy();
 });
 
 test("OpenCode stops on a missing session or failed provider switch instead of using the previous connection", () => {
@@ -226,15 +218,19 @@ test("OpenCode stops on a missing session or failed provider switch instead of u
   const missing = runCn(["opencode", "resume", "ses_missing"], {
     env: rig.env,
   });
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /Could not switch/);
-  assert.ok(!rig.calls().some((call) => call.args[0] === "--standalone"));
+  expect(missing.status).toBe(1);
+  expect(missing.stderr).toMatch(/Could not switch/);
+  expect(
+    !rig.calls().some((call) => call.args[0] === "--standalone"),
+  ).toBeTruthy();
   const failed = runCn(["opencode", "continue"], {
     env: { ...rig.env, FAIL_SWITCH: "1" },
   });
-  assert.equal(failed.status, 1);
-  assert.match(failed.stderr, /Could not switch/);
-  assert.ok(!rig.calls().some((call) => call.args[0] === "--standalone"));
+  expect(failed.status).toBe(1);
+  expect(failed.stderr).toMatch(/Could not switch/);
+  expect(
+    !rig.calls().some((call) => call.args[0] === "--standalone"),
+  ).toBeTruthy();
 });
 
 test("OpenCode keeps --session after a subcommand and creates new named sessions", () => {
@@ -244,8 +240,8 @@ test("OpenCode keeps --session after a subcommand and creates new named sessions
     ["--", "run", "--continue", "hello"],
   ]) {
     const result = runCn(["opencode", ...args], { env: rig.env });
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(rig.calls().at(-1).args, [
+    expect(result.status, result.stderr).toBe(0);
+    expect(rig.calls().at(-1).args).toStrictEqual([
       "run",
       "--standalone",
       "--session",
@@ -257,8 +253,8 @@ test("OpenCode keeps --session after a subcommand and creates new named sessions
   const created = runCn(["opencode", "--", "--session", "ses_new"], {
     env: rig.env,
   });
-  assert.equal(created.status, 0, created.stderr);
-  assert.deepEqual(rig.calls().at(-1).args, [
+  expect(created.status, created.stderr).toBe(0);
+  expect(rig.calls().at(-1).args).toStrictEqual([
     "--standalone",
     "--session",
     "ses_new",
@@ -280,29 +276,23 @@ test("Codex continue and the picker skip subagent and scripted sessions unless a
     0,
   );
   save(file("scripted"), meta("scripted", "exec"), 1000);
-  assert.deepEqual(
-    codexSessions(env).map((s) => s.id),
-    ["interactive"],
-  );
-  assert.deepEqual(
+  expect(codexSessions(env).map((s) => s.id)).toStrictEqual(["interactive"]);
+  expect(
     await resolveSessionArgs("codex", "unused", ["resume", "--last"], env),
-    ["resume", "interactive"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["resume", "interactive"]);
+  expect(
     codexSessions(env, process.cwd(), {
       includeNonInteractive: true,
     }).map((s) => s.id),
-    ["subagent", "scripted", "interactive"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["subagent", "scripted", "interactive"]);
+  expect(
     await resolveSessionArgs(
       "codex",
       "unused",
       ["resume", "--last", "--include-non-interactive"],
       env,
     ),
-    ["resume", "subagent", "--include-non-interactive"],
-  );
+  ).toStrictEqual(["resume", "subagent", "--include-non-interactive"]);
 });
 
 test("a session whose header line is larger than 64 KiB is still found", () => {
@@ -316,10 +306,7 @@ test("a session whose header line is larger than 64 KiB is still found", () => {
       instructions: "x".repeat(200000),
     },
   });
-  assert.deepEqual(
-    codexSessions(env).map((s) => s.id),
-    ["big"],
-  );
+  expect(codexSessions(env).map((s) => s.id)).toStrictEqual(["big"]);
 });
 
 test("codex exec resume --last continues scripted runs and never forwards the picker-only flag", async () => {
@@ -333,13 +320,12 @@ test("codex exec resume --last continues scripted runs and never forwards the pi
   save(file("scripted"), meta("scripted", "exec"), 0);
   save(file("subagent"), meta("subagent", { subagent: { other: "x" } }), 10000);
   for (const extra of [[], ["--include-non-interactive"]])
-    assert.deepEqual(
+    expect(
       await resolveSessionArgs(
         "codex",
         "unused",
         ["exec", "resume", "--last", ...extra, "go"],
         env,
       ),
-      ["exec", "resume", "scripted", "go"],
-    );
+    ).toStrictEqual(["exec", "resume", "scripted", "go"]);
 });

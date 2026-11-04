@@ -1,8 +1,7 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import { summarize } from "../dist/lib/catalog.js";
 import { parseConfig } from "../dist/lib/config-formats.js";
 import {
@@ -23,7 +22,8 @@ import {
 import { applyNativeSetup } from "../dist/lib/native-config-store.js";
 import { runLogout } from "../dist/lib/commands.js";
 import { refreshConfiguredTools } from "../dist/lib/update.js";
-import { fakeTool, tempDir, runCn } from "./helpers.mjs";
+import { fakeTool, tempDir, runCn } from "./helpers.js";
+import { pathToFileURL } from "node:url";
 
 const models = ["gpt-small", "gpt-large"].map((id, index) =>
   summarize({
@@ -94,70 +94,65 @@ for (const id of ["claude", "codex", "opencode", "pi"]) {
     fs.mkdirSync(path.dirname(files.settings), { recursive: true });
     fs.writeFileSync(files.settings, original, { mode: 0o600 });
     await configureTool(id, env);
-    assert.equal(toolConfigured(id, env), true);
+    expect(toolConfigured(id, env)).toBe(true);
     const first = fs.readFileSync(files.settings, "utf8");
     await configureTool(id, env);
-    assert.equal(fs.readFileSync(files.settings, "utf8"), first);
-    assert.equal(
+    expect(fs.readFileSync(files.settings, "utf8")).toBe(first);
+    expect(
       fs.existsSync(path.join(env.HOME, ".zshrc")),
-      false,
       "Must not change shell startup files",
-    );
+    ).toBe(false);
     if (id !== "codex")
-      assert.equal(
+      expect(
         first.includes("sk-native-test"),
-        false,
         "Never put keys in model settings",
-      );
+      ).toBe(false);
     if (id === "codex") {
       const bearer = () =>
         parseConfig(fs.readFileSync(files.settings, "utf8"), "toml")
           .model_providers.concentrate.experimental_bearer_token;
-      assert.equal(bearer(), "sk-native-test");
-      assert.equal(fs.existsSync(files.helper), false, "Codex needs no helper");
+      expect(bearer()).toBe("sk-native-test");
+      expect(fs.existsSync(files.helper), "Codex needs no helper").toBe(false);
       writeKey("sk-rotated", env);
       refreshConfiguredKey(env);
-      assert.equal(bearer(), "sk-rotated");
-      assert.equal(
+      expect(bearer()).toBe("sk-rotated");
+      expect(
         fs.statSync(files.settings).mode & 0o077,
-        0,
         "Codex's key file must be private",
-      );
+      ).toBe(0);
     }
     if (id === "pi") {
       const apiKey = () =>
         JSON.parse(fs.readFileSync(files.catalog, "utf8")).providers.concentrate
           .apiKey;
-      assert.equal(apiKey(), "sk-native-test");
-      assert.equal(fs.existsSync(files.helper), false, "Pi needs no helper");
+      expect(apiKey()).toBe("sk-native-test");
+      expect(fs.existsSync(files.helper), "Pi needs no helper").toBe(false);
       writeKey("sk-rotated", env);
       refreshConfiguredKey(env);
-      assert.equal(apiKey(), "sk-rotated");
-      assert.equal(
+      expect(apiKey()).toBe("sk-rotated");
+      expect(
         fs.statSync(files.catalog).mode & 0o077,
-        0,
         "Pi's key file must be private",
-      );
+      ).toBe(0);
     }
     if (id === "claude") {
       const helper = spawnSync(files.helper, [], {
         env: { PATH: path.dirname(process.execPath) },
         encoding: "utf8",
       });
-      assert.equal(helper.status, 0, helper.stderr);
-      assert.equal(helper.stdout.trim(), "sk-native-test");
+      expect(helper.status, helper.stderr).toBe(0);
+      expect(helper.stdout.trim()).toBe("sk-native-test");
       writeKey("sk-rotated", env);
-      assert.equal(
+      expect(
         spawnSync(files.helper, [], { encoding: "utf8" }).stdout.trim(),
-        "sk-rotated",
-      );
+      ).toBe("sk-rotated");
     }
     const result = resetTool(id, env);
-    assert.equal(result.reset, true);
-    assert.deepEqual(result.preserved, []);
-    assert.equal(toolConfigured(id, env), false);
-    assert.equal(fs.readFileSync(files.settings, "utf8"), original);
-    assert.equal(resetTool(id, env).reset, false);
+    expect(result.reset).toBe(true);
+    expect(result.preserved).toStrictEqual([]);
+    expect(toolConfigured(id, env)).toBe(false);
+    expect(fs.readFileSync(files.settings, "utf8")).toBe(original);
+    expect(resetTool(id, env).reset).toBe(false);
   });
   test(`${id}: Reset preserves user edits and restores fields cn still owns`, async () => {
     const env = fixture();
@@ -175,25 +170,26 @@ for (const id of ["claude", "codex", "opencode", "pi"]) {
             theme: "light",
           });
     fs.writeFileSync(files.settings, text);
-    await assert.rejects(configureTool(id, env), /edited after Configure/);
+    await expect(configureTool(id, env)).rejects.toThrow(
+      /edited after Configure/,
+    );
     const result = resetTool(id, env);
     const restored = parseConfig(
       fs.readFileSync(files.settings, "utf8"),
       format,
     );
-    assert.equal(
-      restored[id === "pi" ? "defaultModel" : "model"],
+    expect(restored[id === "pi" ? "defaultModel" : "model"]).toBe(
       "user-selected",
     );
-    assert.ok(
+    expect(
       result.preserved.some((field) =>
         field.endsWith(id === "pi" ? ": defaultModel" : ": model"),
       ),
-    );
+    ).toBeTruthy();
     if (id === "codex") {
-      assert.equal(restored.custom.keep, true);
-      assert.equal(restored.model_provider, undefined);
-    } else assert.equal(restored.theme, "light");
+      expect(restored.custom.keep).toBe(true);
+      expect(restored.model_provider).toBe(undefined);
+    } else expect(restored.theme).toBe("light");
   });
 }
 
@@ -204,41 +200,37 @@ test("Claude installs a persistent capability plugin; Pi and OpenCode keep conte
     fs.readFileSync(toolConfigPaths("claude", env).installedPlugins),
   );
   const plugin = plugins.plugins["cn-context@concentrate-cn"][0].installPath;
-  const { pathToFileURL } = await import("node:url");
   const limits = await import(
     pathToFileURL(path.join(plugin, "hooks", "limits.mjs"))
   );
-  assert.equal(limits.limits["gpt-small"], models[0].context);
-  assert.equal(limits.limits["gpt-large"], models[1].context);
+  expect(limits.limits["gpt-small"]).toBe(models[0].context);
+  expect(limits.limits["gpt-large"]).toBe(models[1].context);
   const settings = JSON.parse(
     fs.readFileSync(toolConfigPaths("claude", env).settings, "utf8"),
   );
-  assert.equal(settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, undefined);
-  assert.equal(settings.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS, undefined);
+  expect(settings.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(undefined);
+  expect(settings.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe(undefined);
   await configureTool("pi", env);
   const pi = JSON.parse(
     fs.readFileSync(toolConfigPaths("pi", env).catalog, "utf8"),
   );
-  assert.equal(
-    pi.providers.concentrate.models[0].contextWindow,
+  expect(pi.providers.concentrate.models[0].contextWindow).toBe(
     models[0].context,
   );
-  assert.equal(pi.providers.concentrate.models[0].maxTokens, models[0].output);
+  expect(pi.providers.concentrate.models[0].maxTokens).toBe(models[0].output);
   await configureTool("opencode", env);
   const oc = JSON.parse(
     fs.readFileSync(toolConfigPaths("opencode", env).settings, "utf8"),
   );
-  assert.equal(
-    oc.provider.concentrate.models["gpt-small"].limit.context,
+  expect(oc.provider.concentrate.models["gpt-small"].limit.context).toBe(
     models[0].context,
   );
-  assert.equal(
-    oc.provider.concentrate.models["gpt-small"].limit.output,
+  expect(oc.provider.concentrate.models["gpt-small"].limit.output).toBe(
     models[0].output,
   );
   const authFile = toolConfigPaths("opencode", env).catalog;
-  assert.equal(fs.statSync(authFile).mode & 0o777, 0o600);
-  assert.equal(fs.readFileSync(authFile, "utf8"), "sk-native-test");
+  expect(fs.statSync(authFile).mode & 0o777).toBe(0o600);
+  expect(fs.readFileSync(authFile, "utf8")).toBe("sk-native-test");
 });
 
 test("bad JSON, symlinks, and environment-only keys fail without changing native settings", async () => {
@@ -246,19 +238,18 @@ test("bad JSON, symlinks, and environment-only keys fail without changing native
   const files = toolConfigPaths("claude", env);
   fs.mkdirSync(path.dirname(files.settings), { recursive: true });
   fs.writeFileSync(files.settings, "invalid");
-  await assert.rejects(configureTool("claude", env), /invalid/);
-  assert.equal(fs.readFileSync(files.settings, "utf8"), "invalid");
+  await expect(configureTool("claude", env)).rejects.toThrow(/invalid/);
+  expect(fs.readFileSync(files.settings, "utf8")).toBe("invalid");
   fs.unlinkSync(files.settings);
   const target = path.join(env.HOME, "outside.json");
   fs.writeFileSync(target, "{}");
   fs.symlinkSync(target, files.settings);
-  await assert.rejects(configureTool("claude", env), /non-regular/);
-  assert.equal(fs.readFileSync(target, "utf8"), "{}");
+  await expect(configureTool("claude", env)).rejects.toThrow(/non-regular/);
+  expect(fs.readFileSync(target, "utf8")).toBe("{}");
   fs.unlinkSync(path.join(env.CN_CONFIG_HOME, "credentials.json"));
-  await assert.rejects(
+  await expect(
     configureTool("pi", { ...env, CONCENTRATE_API_KEY: "sk-env" }),
-    /environment-only/,
-  );
+  ).rejects.toThrow(/environment-only/);
 });
 
 test("pi: Configure refuses versions before 0.77 without writing", async () => {
@@ -267,8 +258,8 @@ test("pi: Configure refuses versions before 0.77 without writing", async () => {
     version: "0.76.2",
     versionOnStderr: true,
   });
-  await assert.rejects(configureTool("pi", env), /pi update self/);
-  assert.equal(fs.existsSync(toolConfigPaths("pi", env).catalog), false);
+  await expect(configureTool("pi", env)).rejects.toThrow(/pi update self/);
+  expect(fs.existsSync(toolConfigPaths("pi", env).catalog)).toBe(false);
 });
 
 test("OpenCode JSONC comments and other providers survive Configure and Reset", async () => {
@@ -282,26 +273,24 @@ test("OpenCode JSONC comments and other providers survive Configure and Reset", 
   );
   const original = fs.readFileSync(file, "utf8");
   await configureTool("opencode", env);
-  assert.match(fs.readFileSync(file, "utf8"), /keep this comment/);
-  assert.equal(
+  expect(fs.readFileSync(file, "utf8")).toMatch(/keep this comment/);
+  expect(
     parseConfig(fs.readFileSync(file, "utf8"), "json").provider.other.name,
-    "mine",
-  );
+  ).toBe("mine");
   resetTool("opencode", env);
-  assert.equal(fs.readFileSync(file, "utf8"), original);
+  expect(fs.readFileSync(file, "utf8")).toBe(original);
 });
 
 test("CLI Configure and Reset select one tool and keep global cn preferences", () => {
   const env = fixture();
   const result = runCn(["configure", "pi"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(toolConfigured("pi", env), true);
-  assert.equal(runCn(["reset", "pi"], { env }).status, 0);
-  assert.equal(toolConfigured("pi", env), false);
-  assert.equal(
+  expect(result.status, result.stderr).toBe(0);
+  expect(toolConfigured("pi", env)).toBe(true);
+  expect(runCn(["reset", "pi"], { env }).status).toBe(0);
+  expect(toolConfigured("pi", env)).toBe(false);
+  expect(
     readJson(path.join(env.CN_CONFIG_HOME, "credentials.json")).api_key,
-    "sk-native-test",
-  );
+  ).toBe("sk-native-test");
 });
 
 test("saved-key rotation updates OpenCode’s private credential file and Logout restores the previous provider", async () => {
@@ -312,23 +301,22 @@ test("saved-key rotation updates OpenCode’s private credential file and Logout
     env,
     input: "sk-new-native\n",
   });
-  assert.equal(rotated.status, 0, rotated.stderr);
-  assert.equal(fs.readFileSync(file, "utf8"), "sk-new-native");
-  assert.equal(runCn(["logout"], { env }).status, 0);
-  assert.equal(toolConfigured("opencode", env), false);
-  assert.equal(fs.existsSync(file), false);
+  expect(rotated.status, rotated.stderr).toBe(0);
+  expect(fs.readFileSync(file, "utf8")).toBe("sk-new-native");
+  expect(runCn(["logout"], { env }).status).toBe(0);
+  expect(toolConfigured("opencode", env)).toBe(false);
+  expect(fs.existsSync(file)).toBe(false);
 });
 
 test("changing a default also updates an already configured native tool", async () => {
   const env = fixture();
   await configureTool("pi", env);
   const result = runCn(["model", "pi", "gpt-large"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(
+  expect(result.status, result.stderr).toBe(0);
+  expect(
     JSON.parse(fs.readFileSync(toolConfigPaths("pi", env).settings))
       .defaultModel,
-    "gpt-large",
-  );
+  ).toBe("gpt-large");
 });
 
 test("global Reset restores native tools before deleting cn credentials", async () => {
@@ -336,12 +324,11 @@ test("global Reset restores native tools before deleting cn credentials", async 
   await configureTool("claude", env);
   await configureTool("pi", env);
   const result = runCn(["reset", "--yes"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(toolConfigured("claude", env), false);
-  assert.equal(toolConfigured("pi", env), false);
-  assert.equal(fs.existsSync(toolConfigPaths("claude", env).settings), false);
-  assert.equal(
-    fs.existsSync(path.join(env.CN_CONFIG_HOME, "credentials.json")),
+  expect(result.status, result.stderr).toBe(0);
+  expect(toolConfigured("claude", env)).toBe(false);
+  expect(toolConfigured("pi", env)).toBe(false);
+  expect(fs.existsSync(toolConfigPaths("claude", env).settings)).toBe(false);
+  expect(fs.existsSync(path.join(env.CN_CONFIG_HOME, "credentials.json"))).toBe(
     false,
   );
 });
@@ -357,10 +344,9 @@ test("Claude Reset preserves plugins installed after Configure, including the sh
   fs.writeFileSync(file, JSON.stringify(doc));
   resetTool("claude", env);
   const restored = JSON.parse(fs.readFileSync(file));
-  assert.equal(restored.version, 2);
-  assert.equal(restored.plugins["cn-context@concentrate-cn"], undefined);
-  assert.equal(
-    restored.plugins["other@mine"][0].installPath,
+  expect(restored.version).toBe(2);
+  expect(restored.plugins["cn-context@concentrate-cn"]).toBe(undefined);
+  expect(restored.plugins["other@mine"][0].installPath).toBe(
     "/my/other/plugin",
   );
 });
@@ -380,10 +366,9 @@ for (const id of ["codex", "opencode", "pi"]) {
         : id === "opencode"
           ? doc.provider.concentrate.options.headers
           : doc.providers.concentrate.headers;
-    assert.equal(headers["X-App"], id);
-    assert.equal(resetTool(id, env).reset, true);
-    assert.equal(
-      fs.existsSync(id === "pi" ? files.catalog : files.settings),
+    expect(headers["X-App"]).toBe(id);
+    expect(resetTool(id, env).reset).toBe(true);
+    expect(fs.existsSync(id === "pi" ? files.catalog : files.settings)).toBe(
       false,
     );
   });
@@ -420,10 +405,13 @@ for (const id of ["codex", "opencode", "pi"]) {
         : id === "opencode"
           ? doc.provider.concentrate.options.headers
           : doc.providers.concentrate.headers;
-    assert.deepEqual({ ...headers }, { "x-aPP": "my-tool", "X-Other": "keep" });
+    expect({ ...headers }).toStrictEqual({
+      "x-aPP": "my-tool",
+      "X-Other": "keep",
+    });
     await configureTool(id, env);
     resetTool(id, env);
-    assert.equal(fs.readFileSync(target, "utf8"), original);
+    expect(fs.readFileSync(target, "utf8")).toBe(original);
   });
 }
 
@@ -434,36 +422,35 @@ test("codex: adding only the provider keeps the default provider, model, and com
     '# my notes\nmodel = "gpt-6-sol" # keep\n\n[tui]\ntheme = "dark"\n';
   fs.mkdirSync(path.dirname(settings), { recursive: true });
   fs.writeFileSync(settings, original);
-  assert.equal(codexProviderPresent(env), false);
+  expect(codexProviderPresent(env)).toBe(false);
 
   configureCodexProvider(env);
   const doc = parseConfig(fs.readFileSync(settings, "utf8"), "toml");
-  assert.equal(doc.model, "gpt-6-sol");
-  assert.equal(doc.model_provider, undefined);
-  assert.equal(doc.model_catalog_json, undefined);
-  assert.equal(doc.model_providers.concentrate.wire_api, "responses");
-  assert.equal(
-    doc.model_providers.concentrate.experimental_bearer_token,
+  expect(doc.model).toBe("gpt-6-sol");
+  expect(doc.model_provider).toBe(undefined);
+  expect(doc.model_catalog_json).toBe(undefined);
+  expect(doc.model_providers.concentrate.wire_api).toBe("responses");
+  expect(doc.model_providers.concentrate.experimental_bearer_token).toBe(
     "sk-native-test",
   );
-  assert.equal(doc.model_providers.concentrate.auth, undefined);
-  assert.match(fs.readFileSync(settings, "utf8"), /# my notes/);
-  assert.equal(codexProviderPresent(env), true);
-  assert.equal(toolConfigured("codex", env), true);
+  expect(doc.model_providers.concentrate.auth).toBe(undefined);
+  expect(fs.readFileSync(settings, "utf8")).toMatch(/# my notes/);
+  expect(codexProviderPresent(env)).toBe(true);
+  expect(toolConfigured("codex", env)).toBe(true);
 
   resetTool("codex", env);
-  assert.equal(fs.readFileSync(settings, "utf8"), original);
-  assert.equal(codexProviderPresent(env), false);
+  expect(fs.readFileSync(settings, "utf8")).toBe(original);
+  expect(codexProviderPresent(env)).toBe(false);
 });
 
 test("codex: the provider-only setup needs a saved key and is not offered when the config is unreadable", () => {
   const env = fixture();
   fs.rmSync(path.join(env.CN_CONFIG_HOME, "credentials.json"));
-  assert.throws(() => configureCodexProvider(env), /Save your key/);
+  expect(() => configureCodexProvider(env)).toThrow(/Save your key/);
   const { settings } = toolConfigPaths("codex", env);
   fs.mkdirSync(path.dirname(settings), { recursive: true });
   fs.writeFileSync(settings, "not = [valid toml");
-  assert.equal(codexProviderPresent(env), true);
+  expect(codexProviderPresent(env)).toBe(true);
 });
 
 test("logout removes the key copies that Pi and Codex keep in their own config", async () => {
@@ -472,8 +459,8 @@ test("logout removes the key copies that Pi and Codex keep in their own config",
   await configureTool("codex", env);
   const pi = toolConfigPaths("pi", env).catalog;
   const codex = toolConfigPaths("codex", env).settings;
-  assert.match(fs.readFileSync(pi, "utf8"), /sk-native-test/);
-  assert.match(fs.readFileSync(codex, "utf8"), /sk-native-test/);
+  expect(fs.readFileSync(pi, "utf8")).toMatch(/sk-native-test/);
+  expect(fs.readFileSync(codex, "utf8")).toMatch(/sk-native-test/);
   const log = console.log;
   console.log = () => {};
   try {
@@ -482,12 +469,11 @@ test("logout removes the key copies that Pi and Codex keep in their own config",
     console.log = log;
   }
   for (const file of [pi, codex])
-    assert.equal(
+    expect(
       fs.existsSync(file) &&
         fs.readFileSync(file, "utf8").includes("sk-native-test"),
-      false,
       `${file} still holds the key after logout`,
-    );
+    ).toBe(false);
 });
 
 test("a key change leaves a Codex setup from an older cn (helper based) loadable", () => {
@@ -519,8 +505,8 @@ test("a key change leaves a Codex setup from an older cn (helper based) loadable
   refreshConfiguredKey(env);
   const provider = parseConfig(fs.readFileSync(settings, "utf8"), "toml")
     .model_providers.concentrate;
-  assert.equal(provider.experimental_bearer_token, undefined);
-  assert.equal(provider.auth.command, helper);
+  expect(provider.experimental_bearer_token).toBe(undefined);
+  expect(provider.auth.command).toBe(helper);
 });
 
 test("refreshing a provider-only Codex setup keeps Codex's own default provider", async () => {
@@ -532,15 +518,14 @@ test("refreshing a provider-only Codex setup keeps Codex's own default provider"
   const log = console.log;
   console.log = () => {};
   try {
-    assert.equal(await refreshConfiguredTools(env), 0);
+    expect(await refreshConfiguredTools(env)).toBe(0);
   } finally {
     console.log = log;
   }
   const doc = parseConfig(fs.readFileSync(settings, "utf8"), "toml");
-  assert.equal(doc.model_provider, undefined);
-  assert.equal(doc.model, "gpt-6-sol");
-  assert.equal(
-    doc.model_providers.concentrate.experimental_bearer_token,
+  expect(doc.model_provider).toBe(undefined);
+  expect(doc.model).toBe("gpt-6-sol");
+  expect(doc.model_providers.concentrate.experimental_bearer_token).toBe(
     "sk-native-test",
   );
 });

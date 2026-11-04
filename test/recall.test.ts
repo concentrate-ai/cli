@@ -1,11 +1,11 @@
-import assert from "node:assert/strict";
+import os from "node:os";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 
 import { launch } from "../dist/lib/launch.js";
 import { readPreferences, writeJson } from "../dist/lib/settings.js";
-import { tempDir } from "./helpers.mjs";
+import { tempDir } from "./helpers.js";
 
 const CATALOG = [
   {
@@ -87,8 +87,8 @@ test("claude: a model switched inside the tool is remembered for next time", asy
     "claude",
     claudeWrites(r.claudeHome, "claude-sonnet-4-6", "claude-opus-4-6"),
   );
-  assert.equal(await r.run("claude"), 0);
-  assert.equal(r.saved("claude"), "claude-opus-4-6");
+  expect(await r.run("claude")).toBe(0);
+  expect(r.saved("claude")).toBe("claude-opus-4-6");
 });
 
 test("claude: another session writing in the same folder at the same time is not mistaken for this one", async () => {
@@ -100,7 +100,7 @@ fs.writeFileSync(path.join(${JSON.stringify(r.claudeHome)}, "projects", "-some-e
   JSON.stringify({ type: "assistant", message: { model: "claude-opus-4-6" } }) + "\\n");`,
   );
   await r.run("claude");
-  assert.equal(r.configWritten(), false);
+  expect(r.configWritten()).toBe(false);
 });
 
 test("claude: staying on the launch model, or an unknown model, changes nothing", async () => {
@@ -108,7 +108,7 @@ test("claude: staying on the launch model, or an unknown model, changes nothing"
     const r = rig();
     r.tool("claude", claudeWrites(r.claudeHome, model));
     await r.run("claude");
-    assert.equal(r.configWritten(), false, model);
+    expect(r.configWritten(), model).toBe(false);
   }
 });
 
@@ -119,7 +119,7 @@ test("claude: a provider prefix is stripped and synthetic entries are skipped", 
     claudeWrites(r.claudeHome, "anthropic/claude-opus-4-6", "<synthetic>"),
   );
   await r.run("claude");
-  assert.equal(r.saved("claude"), "claude-opus-4-6");
+  expect(r.saved("claude")).toBe("claude-opus-4-6");
 });
 
 test("nothing is remembered for scripted runs, one-off model flags, resumed sessions, or without a catalog", async () => {
@@ -133,12 +133,12 @@ test("nothing is remembered for scripted runs, one-off model flags, resumed sess
     const r = rig();
     r.tool("claude", claudeWrites(r.claudeHome, "claude-opus-4-6"));
     await r.run("claude", opts);
-    assert.equal(r.configWritten(), false, label);
+    expect(r.configWritten(), label).toBe(false);
   }
   const offline = rig({ catalog: false });
   offline.tool("claude", claudeWrites(offline.claudeHome, "claude-opus-4-6"));
   await launch("claude", { tty: true }, { ...offline.env, CN_OFFLINE: "1" });
-  assert.equal(offline.configWritten(), false, "no catalog");
+  expect(offline.configWritten(), "no catalog").toBe(false);
 });
 
 test("the remembered model is what the next launch starts on", async () => {
@@ -153,7 +153,7 @@ test("the remembered model is what the next launch starts on", async () => {
   const args = JSON.parse(
     fs.readFileSync(path.join(r.bin, "args.json"), "utf8"),
   );
-  assert.equal(args[args.indexOf("--model") + 1], "claude-opus-4-6");
+  expect(args[args.indexOf("--model") + 1]).toBe("claude-opus-4-6");
 });
 
 test("a failure while remembering never replaces the tool's exit code", async () => {
@@ -162,7 +162,7 @@ test("a failure while remembering never replaces the tool's exit code", async ()
     "claude",
     `${claudeWrites(r.claudeHome, "claude-opus-4-6")}\nfs.writeFileSync(${JSON.stringify(path.join(r.config, "config.json"))}, "{}", { mode: 0o644 });\nprocess.exit(7);`,
   );
-  assert.equal(await r.run("claude", { model: "claude-sonnet-4-6" }), 7);
+  expect(await r.run("claude", { model: "claude-sonnet-4-6" })).toBe(7);
 });
 
 test("a FIFO where a transcript should be does not hang cn", async () => {
@@ -174,8 +174,8 @@ const dir = path.join(${JSON.stringify(r.claudeHome)}, "projects", "-cwd");
 fs.mkdirSync(dir, { recursive: true });
 require("node:child_process").execFileSync("/usr/bin/mkfifo", [path.join(dir, opt("--session-id") + ".jsonl")]);`,
   );
-  assert.equal(await r.run("claude"), 0);
-  assert.equal(r.configWritten(), false);
+  expect(await r.run("claude")).toBe(0);
+  expect(r.configWritten()).toBe(false);
 });
 
 test("pi owns session IDs and writes to its normal session store", async () => {
@@ -192,19 +192,18 @@ fs.writeFileSync(${JSON.stringify(info)}, JSON.stringify({args: argv, sessions: 
 fs.mkdirSync(path.join(sessions, "--project--"), {recursive:true});
 fs.writeFileSync(path.join(sessions, "--project--", "native-session.jsonl"), "saved conversation");`,
   );
-  assert.equal(await r.run("pi"), 0);
+  expect(await r.run("pi")).toBe(0);
   const result = JSON.parse(fs.readFileSync(info, "utf8"));
-  assert.equal(result.args.includes("--session-id"), false);
-  assert.equal(result.args.includes("--session-dir"), false);
-  assert.equal(result.sessions, fs.realpathSync(path.join(agent, "sessions")));
-  assert.equal(
+  expect(result.args.includes("--session-id")).toBe(false);
+  expect(result.args.includes("--session-dir")).toBe(false);
+  expect(result.sessions).toBe(fs.realpathSync(path.join(agent, "sessions")));
+  expect(
     fs.readFileSync(
       path.join(agent, "sessions", "--project--", "native-session.jsonl"),
       "utf8",
     ),
-    "saved conversation",
-  );
-  assert.equal(r.configWritten(), false);
+  ).toBe("saved conversation");
+  expect(r.configWritten()).toBe(false);
 });
 
 test("pi: a failure while preparing removes the temporary directory", async () => {
@@ -213,15 +212,14 @@ test("pi: a failure while preparing removes the temporary directory", async () =
   const invalid = path.join(r.bin, "invalid-agent");
   fs.writeFileSync(invalid, "not a directory");
   r.env.PI_CODING_AGENT_DIR = invalid;
-  const os = await import("node:os");
   const before = new Set(
     fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("cn-pi-")),
   );
-  await assert.rejects(r.run("pi"));
+  await expect(r.run("pi")).rejects.toThrow();
   const left = fs
     .readdirSync(os.tmpdir())
     .filter((n) => n.startsWith("cn-pi-") && !before.has(n));
-  assert.deepEqual(left, []);
+  expect(left).toStrictEqual([]);
 });
 
 // Like the real Codex: a dated rollout file whose first line is a session_meta header.
@@ -246,7 +244,7 @@ test("codex: the model from this run's session is remembered", async () => {
   const r = rig();
   r.tool("codex", codexWrites(r.codexHome, {}, "gpt-5.5", "gpt-5.4"));
   await r.run("codex");
-  assert.equal(r.saved("codex"), "gpt-5.4");
+  expect(r.saved("codex")).toBe("gpt-5.4");
 });
 
 test("codex: sessions from another directory or provider are ignored", async () => {
@@ -260,7 +258,7 @@ test("codex: sessions from another directory or provider are ignored", async () 
     ),
   );
   await elsewhere.run("codex");
-  assert.equal(elsewhere.configWritten(), false, "other directory");
+  expect(elsewhere.configWritten(), "other directory").toBe(false);
 
   const provider = rig();
   provider.tool(
@@ -268,7 +266,7 @@ test("codex: sessions from another directory or provider are ignored", async () 
     codexWrites(provider.codexHome, { provider: "openai" }, "claude-opus-4-6"),
   );
   await provider.run("codex");
-  assert.equal(provider.configWritten(), false, "other provider");
+  expect(provider.configWritten(), "other provider").toBe(false);
 });
 
 test("codex: after the session ends, cn prints the command that resumes it through Concentrate", async () => {
@@ -285,8 +283,8 @@ test("codex: after the session ends, cn prints the command that resumes it throu
   } finally {
     console.error = original;
   }
-  assert.ok(
+  expect(
     lines.some((line) => line.includes("cn codex resume 01a1-resume-me")),
     lines.join("\n"),
-  );
+  ).toBeTruthy();
 });

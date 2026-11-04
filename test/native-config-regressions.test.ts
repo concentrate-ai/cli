@@ -1,16 +1,21 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
-import { parseConfig, setConfig } from "../dist/lib/config-formats.js";
+import { test, expect } from "vitest";
+import { parseConfig, setConfig } from "../src/lib/config-formats.js";
 import {
   applyNativeSetup,
   resetNativeSetup,
-} from "../dist/lib/native-config-store.js";
-import { cursorConfigured, cursorDatabase } from "../dist/lib/cursor-config.js";
-import { configureTool, resetTool } from "../dist/lib/tool-config.js";
-import { readJson, writeKey, writePreferences } from "../dist/lib/settings.js";
-import { tempDir } from "./helpers.mjs";
+} from "../src/lib/native-config-store.js";
+import { cursorConfigured, cursorDatabase } from "../src/lib/cursor-config.js";
+import { configureTool, resetTool } from "../src/lib/tool-config.js";
+import {
+  readJson,
+  writeKey,
+  writePreferences,
+  writeJson,
+} from "../src/lib/settings.js";
+import { tempDir, fakeTool } from "./helpers.js";
+import { summarize } from "../src/lib/catalog.js";
 
 const plan = (file, entries) => ({
   file,
@@ -29,8 +34,8 @@ test("configuring twice then resetting keeps edits made in between", () => {
   fs.writeFileSync(file, JSON.stringify(edited, null, 2));
   applyNativeSetup(state, [plan(file, [[["model"], "b"]])]);
   const result = resetNativeSetup(state, [file]);
-  assert.deepEqual(result.preserved, []);
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), {
+  expect(result.preserved).toStrictEqual([]);
+  expect(JSON.parse(fs.readFileSync(file, "utf8"))).toStrictEqual({
     theme: "dark",
     permissions: { allow: ["Bash(ls)"] },
   });
@@ -45,7 +50,7 @@ test("an untouched file still returns to its exact original bytes after reconfig
   applyNativeSetup(state, [plan(file, [[["model"], "a"]])]);
   applyNativeSetup(state, [plan(file, [[["model"], "b"]])]);
   resetNativeSetup(state, [file]);
-  assert.equal(fs.readFileSync(file, "utf8"), original);
+  expect(fs.readFileSync(file, "utf8")).toBe(original);
 });
 
 test("a setting an earlier Configure wrote stays tracked when the plan changes", () => {
@@ -63,7 +68,7 @@ test("a setting an earlier Configure wrote stays tracked when the plan changes",
   edited.theme = "light";
   fs.writeFileSync(file, JSON.stringify(edited));
   resetNativeSetup(state, [file]);
-  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), {
+  expect(JSON.parse(fs.readFileSync(file, "utf8"))).toStrictEqual({
     theme: "light",
   });
 });
@@ -76,9 +81,9 @@ test("Reset keeps the restore record when the user deleted a configured file", (
   applyNativeSetup(state, [plan(file, [[["model"], "a"]])]);
   fs.rmSync(file);
   const result = resetNativeSetup(state, [file]);
-  assert.deepEqual(result.preserved, [file]);
-  assert.ok(fs.existsSync(state));
-  assert.equal(readJson(state).files[0].original, '{ "theme": "dark" }\n');
+  expect(result.preserved).toStrictEqual([file]);
+  expect(fs.existsSync(state)).toBeTruthy();
+  expect(readJson(state).files[0].original).toBe('{ "theme": "dark" }\n');
 });
 
 test("a failed Configure keeps the credential helper executable", (t) => {
@@ -100,20 +105,20 @@ test("a failed Configure keeps the credential helper executable", (t) => {
   applyNativeSetup(state, plans("one"));
   fs.chmodSync(path.dirname(file), 0o500);
   try {
-    assert.throws(() => applyNativeSetup(state, plans("two")));
+    expect(() => applyNativeSetup(state, plans("two"))).toThrow();
   } finally {
     fs.chmodSync(path.dirname(file), 0o700);
   }
-  assert.equal(fs.statSync(helper).mode & 0o777, 0o700);
-  assert.equal(fs.readFileSync(helper, "utf8"), "one");
+  expect(fs.statSync(helper).mode & 0o777).toBe(0o700);
+  expect(fs.readFileSync(helper, "utf8")).toBe("one");
 });
 
 test("whitespace-only and comment-only JSON files are valid empty configurations", () => {
   for (const text of ["", "\n", "// note\n", "/* a */\n"]) {
-    assert.deepEqual(parseConfig(text, "json"), {});
+    expect(parseConfig(text, "json")).toStrictEqual({});
     const written = setConfig(text, "json", ["model"], "x");
-    assert.deepEqual(parseConfig(written, "json"), { model: "x" });
-    assert.ok(written.startsWith(text.trim() ? text.trimEnd() : "{"));
+    expect(parseConfig(written, "json")).toStrictEqual({ model: "x" });
+    expect(written.startsWith(text.trim() ? text.trimEnd() : "{")).toBeTruthy();
   }
 });
 
@@ -133,9 +138,6 @@ function toolFixture() {
 
 test("Logout/Reset removes OpenCode's key file even if an unrelated setting was edited", async () => {
   const { bin, env } = toolFixture();
-  const { fakeTool } = await import("./helpers.mjs");
-  const { summarize } = await import("../dist/lib/catalog.js");
-  const { writeJson } = await import("../dist/lib/settings.js");
   fakeTool(bin, "opencode");
   writeKey("sk-regression", env);
   writePreferences(
@@ -175,13 +177,13 @@ test("Logout/Reset removes OpenCode's key file even if an unrelated setting was 
     "opencode",
     "api-key",
   );
-  assert.ok(fs.existsSync(keyFile));
+  expect(fs.existsSync(keyFile)).toBeTruthy();
   const edited = JSON.parse(fs.readFileSync(settings, "utf8"));
   edited.theme = "tokyo";
   fs.writeFileSync(settings, JSON.stringify(edited));
   resetTool("opencode", env);
-  assert.equal(fs.existsSync(keyFile), false);
-  assert.equal(JSON.parse(fs.readFileSync(settings, "utf8")).theme, "tokyo");
+  expect(fs.existsSync(keyFile)).toBe(false);
+  expect(JSON.parse(fs.readFileSync(settings, "utf8")).theme).toBe("tokyo");
 });
 
 test("an unreadable Cursor database does not make cursorConfigured throw", () => {
@@ -189,7 +191,7 @@ test("an unreadable Cursor database does not make cursorConfigured throw", () =>
   const database = cursorDatabase(env);
   fs.mkdirSync(path.dirname(database), { recursive: true });
   fs.writeFileSync(database, "not a sqlite database");
-  assert.equal(cursorConfigured(env), false);
+  expect(cursorConfigured(env)).toBe(false);
 });
 
 test("TOML edits keep comments and unrelated layout, through Configure and an edited Reset", () => {
@@ -225,21 +227,22 @@ test("TOML edits keep comments and unrelated layout, through Configure and an ed
     ]),
   ]);
   const configured = fs.readFileSync(file, "utf8");
-  assert.match(configured, /# my codex config/);
-  assert.match(configured, /# providers I use/);
-  assert.match(configured, /model = "new"  # keep this note|model = "new"/);
-  assert.deepEqual(
-    parseConfig(configured, "toml").model_providers.cn.name,
+  expect(configured).toMatch(/# my codex config/);
+  expect(configured).toMatch(/# providers I use/);
+  expect(configured).toMatch(/model = "new"  # keep this note|model = "new"/);
+  expect(parseConfig(configured, "toml").model_providers.cn.name).toStrictEqual(
     "CN",
   );
   // The user edits an unrelated setting, then Reset only undoes cn's changes.
   fs.writeFileSync(file, configured.replace('"trusted"', '"untrusted"'));
   resetNativeSetup(state, [file]);
   const restored = fs.readFileSync(file, "utf8");
-  assert.match(restored, /# my codex config/);
-  assert.match(restored, /# providers I use/);
-  assert.match(restored, /untrusted/);
-  assert.deepEqual(JSON.parse(JSON.stringify(parseConfig(restored, "toml"))), {
+  expect(restored).toMatch(/# my codex config/);
+  expect(restored).toMatch(/# providers I use/);
+  expect(restored).toMatch(/untrusted/);
+  expect(
+    JSON.parse(JSON.stringify(parseConfig(restored, "toml"))),
+  ).toStrictEqual({
     model: "old",
     model_providers: { mine: { name: "Mine" } },
     projects: { x: { trust_level: "untrusted" } },

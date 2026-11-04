@@ -1,23 +1,21 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   appHeaders,
   codexHeaderConfig,
   openCodeHeaders,
-} from "../dist/lib/app-headers.js";
-import { tempDir } from "./helpers.mjs";
-import codex from "../dist/lib/harnesses/codex.js";
-import pi from "../dist/lib/harnesses/pi.js";
-import opencode from "../dist/lib/harnesses/opencode.js";
+} from "../src/lib/app-headers.js";
+import { tempDir } from "./helpers.js";
+import codex from "../src/lib/harnesses/codex.js";
+import pi from "../src/lib/harnesses/pi.js";
+import opencode from "../src/lib/harnesses/opencode.js";
 
 test("header names are case-insensitive, values and unrelated headers survive", () => {
-  assert.deepEqual(
+  expect(
     appHeaders("pi", { "X-App": "old", Other: "yes" }, { "x-APP": "custom" }),
-    { Other: "yes", "x-APP": "custom" },
-  );
-  assert.deepEqual(appHeaders("pi"), { "X-App": "pi" });
+  ).toStrictEqual({ Other: "yes", "x-APP": "custom" });
+  expect(appHeaders("pi")).toStrictEqual({ "X-App": "pi" });
 });
 
 test("Codex respects CLI overrides and environment-supplied X-App", () => {
@@ -27,14 +25,13 @@ test("Codex respects CLI overrides and environment-supplied X-App", () => {
     path.join(dir, "config.toml"),
     '[model_providers.concentrate.env_http_headers]\n"x-app"="APP_NAME"\n',
   );
-  assert.deepEqual(codexHeaderConfig("concentrate", env).http_headers, {});
-  assert.deepEqual(
+  expect(codexHeaderConfig("concentrate", env).http_headers).toStrictEqual({});
+  expect(
     codexHeaderConfig("concentrate", env, [
       "-c",
       'model_providers.concentrate.http_headers={"x-aPP"="explicit"}',
     ]).http_headers,
-    { "x-aPP": "explicit" },
-  );
+  ).toStrictEqual({ "x-aPP": "explicit" });
 });
 
 for (const modern of [false, true])
@@ -55,11 +52,11 @@ for (const modern of [false, true])
       OPENCODE_CONFIG: file,
       OPENCODE_CONFIG_CONTENT: JSON.stringify(provider({ "X-APP": "inline" })),
     };
-    assert.deepEqual(openCodeHeaders(env, modern), {
+    expect(openCodeHeaders(env, modern)).toStrictEqual({
       Other: "keep",
       "X-APP": "inline",
     });
-    assert.deepEqual(openCodeHeaders(env, modern, false), {
+    expect(openCodeHeaders(env, modern, false)).toStrictEqual({
       "x-App": "saved",
       Other: "keep",
     });
@@ -83,11 +80,11 @@ test("launch adapters add X-App and preserve existing Pi provider headers", asyn
     env,
   };
   const prepared = await codex.prepare({ ...input, forwarded: [] });
-  assert.ok(
+  expect(
     prepared.args.includes(
       'model_providers.concentrate.http_headers={"X-App"="codex"}',
     ),
-  );
+  ).toBeTruthy();
   prepared.cleanup();
   fs.writeFileSync(
     path.join(root, "models.json"),
@@ -102,7 +99,7 @@ test("launch adapters add X-App and preserve existing Pi provider headers", asyn
         path.join(launched.env.PI_CODING_AGENT_DIR, "models.json"),
       ),
     );
-    assert.deepEqual(doc.providers.concentrate.headers, {
+    expect(doc.providers.concentrate.headers).toStrictEqual({
       "x-app": "custom-pi",
     });
   } finally {
@@ -112,11 +109,10 @@ test("launch adapters add X-App and preserve existing Pi provider headers", asyn
     ...input,
     executable: "/usr/bin/false",
   });
-  assert.equal(
+  expect(
     JSON.parse(opened.env.OPENCODE_CONFIG_CONTENT).provider.concentrate.options
       .headers["X-App"],
-    "opencode",
-  );
+  ).toBe("opencode");
 });
 
 test("Codex keeps subcommand config overrides beside its connection options", async () => {
@@ -135,13 +131,15 @@ test("Codex keeps subcommand config overrides beside its connection options", as
     env: { HOME: root },
   });
   const subcommand = prepared.args.indexOf("exec");
-  assert.ok(prepared.args.indexOf('model_provider="concentrate"') < subcommand);
-  assert.ok(
+  expect(
+    prepared.args.indexOf('model_provider="concentrate"') < subcommand,
+  ).toBeTruthy();
+  expect(
     prepared.args.indexOf(
       'model_providers.concentrate.http_headers={"x-app"="custom"}',
     ) < subcommand,
-  );
-  assert.deepEqual(prepared.args.slice(subcommand), ["exec", "Reply OK"]);
+  ).toBeTruthy();
+  expect(prepared.args.slice(subcommand)).toStrictEqual(["exec", "Reply OK"]);
   prepared.cleanup();
 });
 
@@ -160,12 +158,11 @@ test("Pi keeps the user's MCP config and other files but never their login", asy
   });
   try {
     const dir = launched.env.PI_CODING_AGENT_DIR;
-    assert.equal(
-      fs.readFileSync(path.join(dir, "mcp.json"), "utf8"),
+    expect(fs.readFileSync(path.join(dir, "mcp.json"), "utf8")).toBe(
       '{"mcpServers":{"a":{}}}',
     );
-    assert.ok(fs.existsSync(path.join(dir, "extensions")));
-    assert.equal(fs.existsSync(path.join(dir, "auth.json")), false);
+    expect(fs.existsSync(path.join(dir, "extensions"))).toBeTruthy();
+    expect(fs.existsSync(path.join(dir, "auth.json"))).toBe(false);
   } finally {
     launched.cleanup();
   }

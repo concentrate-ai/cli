@@ -1,22 +1,21 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   modelsFor,
   routingModels,
   summarize,
   fetchCatalog,
-} from "../dist/lib/catalog.js";
+} from "../src/lib/catalog.js";
 import {
   DEFAULT_MODELS,
   readPreferences,
   readJson,
   writeJson,
   writePreferences,
-} from "../dist/lib/settings.js";
-import { menuItems } from "../dist/lib/launcher.js";
-import { CODEX_TEMPLATE, runCn, tempDir } from "./helpers.mjs";
+} from "../src/lib/settings.js";
+import { menuItems } from "../src/lib/launcher.js";
+import { CODEX_TEMPLATE, runCn, tempDir } from "./helpers.js";
 
 const provider = (slug, context = 1000) => ({
   provider_slug: slug,
@@ -47,30 +46,29 @@ test("retired routing preference is ignored and removed on the next model save",
     autoProvider: false,
     models: { ...DEFAULT_MODELS, pi: "a/gpt-m1" },
   });
-  assert.equal(readPreferences(env).pi, "a/gpt-m1");
+  expect(readPreferences(env).pi).toBe("a/gpt-m1");
   writePreferences({ ...DEFAULT_MODELS, pi: "gpt-m2" }, env);
-  assert.equal(readPreferences(env).pi, "gpt-m2");
-  assert.equal(Object.hasOwn(readJson(file), "autoProvider"), false);
+  expect(readPreferences(env).pi).toBe("gpt-m2");
+  expect(Object.hasOwn(readJson(file), "autoProvider")).toBe(false);
 });
 
 test("catalog exposes unique slugs for every tool and retains provider metadata internally", () => {
-  assert.deepEqual(
-    routingModels(models).map((m) => m.id),
-    ["gpt-m1", "gpt-m2"],
-  );
+  expect(routingModels(models).map((m) => m.id)).toStrictEqual([
+    "gpt-m1",
+    "gpt-m2",
+  ]);
   for (const harness of Object.keys(DEFAULT_MODELS)) {
-    assert.deepEqual(
-      modelsFor(harness, models).map((m) => m.id),
-      ["gpt-m1", "gpt-m2"],
-    );
+    expect(modelsFor(harness, models).map((m) => m.id)).toStrictEqual([
+      "gpt-m1",
+      "gpt-m2",
+    ]);
   }
-  assert.equal(models[0].variants[1].context, 2000);
-  assert.equal(models[0].variants[0].image, true);
-  assert.equal(models[0].variants[0].reasoning, true);
-  assert.deepEqual(
-    routingModels([models[0], models[0]]).map((m) => m.id),
-    ["gpt-m1"],
-  );
+  expect(models[0].variants[1].context).toBe(2000);
+  expect(models[0].variants[0].image).toBe(true);
+  expect(models[0].variants[0].reasoning).toBe(true);
+  expect(routingModels([models[0], models[0]]).map((m) => m.id)).toStrictEqual([
+    "gpt-m1",
+  ]);
 });
 
 test("provider entries survive cache round trips and old cache is refreshed", async () => {
@@ -83,12 +81,11 @@ test("provider entries survive cache round trips and old cache is refreshed", as
   try {
     globalThis.fetch = async () =>
       new Response(JSON.stringify({ data: [raw("gpt-m1")], has_more: false }));
-    assert.equal((await fetchCatalog({ env })).source, "live");
+    expect((await fetchCatalog({ env })).source).toBe("live");
     const cached = await fetchCatalog({ env: { ...env, CN_OFFLINE: "1" } });
-    assert.deepEqual(
-      modelsFor("pi", cached.models).map((m) => m.id),
-      ["gpt-m1"],
-    );
+    expect(modelsFor("pi", cached.models).map((m) => m.id)).toStrictEqual([
+      "gpt-m1",
+    ]);
   } finally {
     globalThis.fetch = original;
   }
@@ -96,10 +93,9 @@ test("provider entries survive cache round trips and old cache is refreshed", as
 
 test("routing toggle is absent from commands, help, and launcher", () => {
   const env = { CN_CONFIG_HOME: tempDir() };
-  assert.equal(runCn(["settings"], { env }).status, 0);
-  assert.doesNotMatch(runCn(["--help"], { env }).stdout, /auto-provider/);
-  assert.equal(
-    menuItems(env).items.some((item) => item.value === "settings"),
+  expect(runCn(["settings"], { env }).status).toBe(0);
+  expect(runCn(["--help"], { env }).stdout).not.toMatch(/auto-provider/);
+  expect(menuItems(env).items.some((item) => item.value === "settings")).toBe(
     true,
   );
 });
@@ -150,11 +146,13 @@ console.log(JSON.stringify({ args, catalog }));`,
         { mode: 0o755 },
       );
       const result = runCn([harness], { env });
-      assert.equal(result.status, 0, result.stderr);
+      expect(result.status, result.stderr).toBe(0);
       const actual = JSON.parse(result.stdout);
       const expected = ["gpt-m1", "gpt-m2"];
-      assert.deepEqual([...actual.catalog].sort(), [...expected].sort());
-      assert.ok(actual.args.includes("gpt-m1") || harness === "opencode");
+      expect([...actual.catalog].sort()).toStrictEqual([...expected].sort());
+      expect(
+        actual.args.includes("gpt-m1") || harness === "opencode",
+      ).toBeTruthy();
     });
   }
 }

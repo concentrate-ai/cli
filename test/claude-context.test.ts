@@ -1,10 +1,13 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { test } from "node:test";
+import { test, expect, onTestFinished } from "vitest";
 import { prepareClaudeContext } from "../dist/lib/claude-context.js";
 import claude from "../dist/lib/harnesses/claude.js";
+import {
+  outputLimit,
+  supportedEffort,
+} from "../dist/lib/claude-context/register.mjs";
 
 const available = [
   { id: "custom-small", context: 128000 },
@@ -16,7 +19,7 @@ const available = [
 
 async function rig(t, options = {}) {
   const plugin = prepareClaudeContext({ available, ...options });
-  t.after(plugin.cleanup);
+  onTestFinished(plugin.cleanup);
   const { register } = await import(
     pathToFileURL(path.join(plugin.directory, "hooks/register.mjs"))
   );
@@ -65,7 +68,7 @@ test("switching large → small → native → custom updates and clears the sam
       { to_model: "a-stale-switch" },
       async () => ({}),
     );
-    assert.equal(r.value(), value, model);
+    expect(r.value(), model).toBe(value);
   }
 });
 
@@ -73,18 +76,16 @@ test("prompt gate corrects stale limits before next and stops prompts when synch
   const r = await rig(t);
   r.setModel("custom-small");
   await r.hooks.get("prompt.submit")(r.$, {}, async () => {
-    assert.equal(r.value(), "128000");
+    expect(r.value()).toBe("128000");
   });
   r.$.env.set = async () => {
     throw new Error("denied");
   };
   r.setModel("custom-large");
-  await assert.rejects(
-    r.hooks.get("prompt.submit")(r.$, {}, () => assert.fail("must not send")),
-    /denied/,
-  );
-  assert.match(
-    (await r.hooks.get("prompt.submit:catch")()).drop,
+  await expect(
+    r.hooks.get("prompt.submit")(r.$, {}, () => expect.fail("must not send")),
+  ).rejects.toThrow(/denied/);
+  expect((await r.hooks.get("prompt.submit:catch")()).drop).toMatch(
     /could not update/,
   );
 });
@@ -96,23 +97,20 @@ test("commands use the actual selected model and denied or failed switches leave
     r.setModel("custom-small");
     return { text: "switched" };
   });
-  assert.equal(r.value(), "128000");
+  expect(r.value()).toBe("128000");
   const result = await command(r.$, {}, async () => ({ text: "denied" }));
-  assert.equal(result.text, "denied");
-  assert.equal(r.value(), "128000");
-  await assert.rejects(
+  expect(result.text).toBe("denied");
+  expect(r.value()).toBe("128000");
+  await expect(
     command(r.$, {}, async () => {
       throw new Error("cancelled");
     }),
-    /cancelled/,
-  );
-  assert.equal(r.value(), "128000");
+  ).rejects.toThrow(/cancelled/);
+  expect(r.value()).toBe("128000");
   r.setModel("custom-large");
   await command(r.$, {}, async () => {
-    assert.equal(
-      r.value(),
+    expect(r.value(), "/context and /compact read the current window").toBe(
       "400000",
-      "/context and /compact read the current window",
     );
   });
 });
@@ -123,10 +121,10 @@ test("temporary plugin contains only model metadata and is removed on cleanup", 
     path.join(r.plugin.directory, "hooks/limits.mjs"),
     "utf8",
   );
-  assert.match(text, /custom-small/);
-  assert.doesNotMatch(text, /undefined|apiKey|sk-/);
+  expect(text).toMatch(/custom-small/);
+  expect(text).not.toMatch(/undefined|apiKey|sk-/);
   r.plugin.cleanup();
-  assert.equal(fs.existsSync(r.plugin.directory), false);
+  expect(fs.existsSync(r.plugin.directory)).toBe(false);
 });
 
 test("explicit context override stays fixed while the plugin manages other capabilities", async () => {
@@ -137,12 +135,11 @@ test("explicit context override stays fixed while the plugin manages other capab
     forwarded: [],
     env: { CLAUDE_CODE_MAX_CONTEXT_TOKENS: "100000" },
   });
-  assert.ok(prepared.args.includes("--plugin-dir"));
-  assert.equal(
+  expect(prepared.args.includes("--plugin-dir")).toBeTruthy();
+  expect(
     JSON.parse(prepared.args[prepared.args.indexOf("--settings") + 1])
       .enabledPlugins["cn-context@concentrate-cn"],
-    false,
-  );
+  ).toBe(false);
   const data = await import(
     pathToFileURL(
       path.join(
@@ -151,10 +148,9 @@ test("explicit context override stays fixed while the plugin manages other capab
       ),
     )
   );
-  assert.equal(data.preferences.fixedContext, true);
-  assert.equal(prepared.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "100000");
-  assert.equal(
-    JSON.parse(prepared.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS,
+  expect(data.preferences.fixedContext).toBe(true);
+  expect(prepared.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe("100000");
+  expect(JSON.parse(prepared.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(
     "100000",
   );
   prepared.cleanup();
@@ -162,32 +158,27 @@ test("explicit context override stays fixed while the plugin manages other capab
 
 test("modes that disable the synchronization plugin are refused with an actionable message", () => {
   for (const flag of ["--bare", "--safe-mode"]) {
-    assert.throws(
-      () => prepareClaudeContext({ available, forwarded: [flag] }),
-      /Remove --bare or --safe-mode/,
-    );
+    expect(() =>
+      prepareClaudeContext({ available, forwarded: [flag] }),
+    ).toThrow(/Remove --bare or --safe-mode/);
   }
 });
 
 test("output budgets respect model caps without raising Claude's default request size", async () => {
-  const { outputLimit } =
-    await import("../dist/lib/claude-context/register.mjs");
-  assert.equal(outputLimit(4096), "4096");
-  assert.equal(outputLimit(128000), "32000");
-  assert.equal(outputLimit(4096, "64000"), "4096");
-  assert.equal(outputLimit(128000, "64_000"), "64000");
-  assert.equal(outputLimit(null, "64000"), "64000");
-  assert.equal(outputLimit(null), undefined);
+  expect(outputLimit(4096)).toBe("4096");
+  expect(outputLimit(128000)).toBe("32000");
+  expect(outputLimit(4096, "64000")).toBe("4096");
+  expect(outputLimit(128000, "64_000")).toBe("64000");
+  expect(outputLimit(null, "64000")).toBe("64000");
+  expect(outputLimit(null)).toBe(undefined);
 });
 
 test("effort is clamped to supported named levels and unknown metadata leaves it alone", async () => {
-  const { supportedEffort } =
-    await import("../dist/lib/claude-context/register.mjs");
-  assert.equal(supportedEffort("max", ["low", "medium"]), "medium");
-  assert.equal(supportedEffort("low", ["high"]), "high");
-  assert.equal(supportedEffort("medium", ["low", "medium", "high"]), "medium");
-  assert.equal(supportedEffort("max", null), "max");
-  assert.equal(supportedEffort("max", ["none"]), "max");
+  expect(supportedEffort("max", ["low", "medium"])).toBe("medium");
+  expect(supportedEffort("low", ["high"])).toBe("high");
+  expect(supportedEffort("medium", ["low", "medium", "high"])).toBe("medium");
+  expect(supportedEffort("max", null)).toBe("max");
+  expect(supportedEffort("max", ["none"])).toBe("max");
 });
 
 test("output and thinking overrides follow custom models and restore on native Claude", async (t) => {
@@ -207,7 +198,7 @@ test("output and thinking overrides follow custom models and restore on native C
       },
     ],
   });
-  t.after(plugin.cleanup);
+  onTestFinished(plugin.cleanup);
   const { register } = await import(
     pathToFileURL(path.join(plugin.directory, "hooks/register.mjs"))
   );
@@ -226,12 +217,12 @@ test("output and thinking overrides follow custom models and restore on native C
     },
   };
   await hooks.get("session.start")($, {}, async () => ({}));
-  assert.equal(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS"), "4096");
-  assert.equal(values.get("CLAUDE_CODE_DISABLE_THINKING"), "1");
+  expect(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS")).toBe("4096");
+  expect(values.get("CLAUDE_CODE_DISABLE_THINKING")).toBe("1");
   model = "thinking";
   await hooks.get("prompt.submit")($, {}, async () => ({}));
-  assert.equal(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS"), "32000");
-  assert.equal(values.get("CLAUDE_CODE_DISABLE_THINKING"), undefined);
+  expect(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS")).toBe("32000");
+  expect(values.get("CLAUDE_CODE_DISABLE_THINKING")).toBe(undefined);
   const requests = [];
   const next = async function* (event) {
     requests.push(event);
@@ -242,11 +233,11 @@ test("output and thinking overrides follow custom models and restore on native C
     next,
   )) {
   }
-  assert.equal(requests[0].effort, "medium");
+  expect(requests[0].effort).toBe("medium");
   model = "claude-sonnet-4-6";
   await hooks.get("classic.PostModelSwitch")($, {}, async () => ({}));
-  assert.equal(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS"), undefined);
-  assert.equal(values.get("CLAUDE_CODE_DISABLE_THINKING"), undefined);
+  expect(values.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS")).toBe(undefined);
+  expect(values.get("CLAUDE_CODE_DISABLE_THINKING")).toBe(undefined);
 });
 
 test("a permanent mod reads explicit preferences when the session starts", async (t) => {
@@ -256,6 +247,6 @@ test("a permanent mod reads explicit preferences when the session starts", async
   await r.hooks.get("session.start")(r.$, {}, async () => ({}));
   r.setModel("custom-small");
   await r.hooks.get("classic.PostModelSwitch")(r.$, {}, async () => ({}));
-  assert.equal(r.value(), "90000");
-  assert.equal(await r.$.env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS"), "2000");
+  expect(r.value()).toBe("90000");
+  expect(await r.$.env.get("CLAUDE_CODE_MAX_OUTPUT_TOKENS")).toBe("2000");
 });

@@ -1,14 +1,13 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   withSetupLock,
   hasNativeSetup,
-} from "../dist/lib/native-config-store.js";
-import { readStoredKey, writeKey } from "../dist/lib/settings.js";
-import { fakeTool, runCn, tempDir } from "./helpers.mjs";
+} from "../src/lib/native-config-store.js";
+import { readStoredKey, writeKey } from "../src/lib/settings.js";
+import { fakeTool, runCn, tempDir } from "./helpers.js";
 
 function home() {
   const dir = tempDir("cn-recovery-");
@@ -45,8 +44,8 @@ test("a damaged saved key can be replaced with cn key and cn setup", () => {
         env,
         input: "sk-brand-new\n",
       });
-      assert.equal(result.status, 0, `${command} (${name}): ${result.stderr}`);
-      assert.equal(readStoredKey(env), "sk-brand-new", `${command} (${name})`);
+      expect(result.status, `${command} (${name}): ${result.stderr}`).toBe(0);
+      expect(readStoredKey(env), `${command} (${name})`).toBe("sk-brand-new");
     }
   }
 });
@@ -58,9 +57,9 @@ test("the first-run check treats a damaged key as missing instead of crashing", 
     mode: 0o600,
   });
   const result = runCn(["claude"], { env });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /No API key found|cn key|cn setup/);
-  assert.doesNotMatch(result.stderr, /unexpected error/);
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/No API key found|cn key|cn setup/);
+  expect(result.stderr).not.toMatch(/unexpected error/);
 });
 
 test("a config.json that other users can read does not stop cn", () => {
@@ -73,12 +72,12 @@ test("a config.json that other users can read does not stop cn", () => {
     { mode: 0o644 },
   );
   const shown = runCn(["config"], { env });
-  assert.equal(shown.status, 0, shown.stderr);
+  expect(shown.status, shown.stderr).toBe(0);
   const result = runCn(["codex", "--", "exec", "hi"], {
     env: { ...env, CN_OFFLINE: "1" },
   });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(record().args[record().args.indexOf("-m") + 1], "gpt-5.4");
+  expect(result.status, result.stderr).toBe(0);
+  expect(record().args[record().args.indexOf("-m") + 1]).toBe("gpt-5.4");
 });
 
 test("a damaged restore receipt does not block logout", () => {
@@ -89,10 +88,10 @@ test("a damaged restore receipt does not block logout", () => {
   fs.writeFileSync(path.join(receipts, "restore.json"), "{not json", {
     mode: 0o600,
   });
-  assert.equal(hasNativeSetup(path.join(receipts, "restore.json")), false);
+  expect(hasNativeSetup(path.join(receipts, "restore.json"))).toBe(false);
   const result = runCn(["logout"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.existsSync(credentials(env)), false);
+  expect(result.status, result.stderr).toBe(0);
+  expect(fs.existsSync(credentials(env))).toBe(false);
 });
 
 test("logout removes the saved key even when a tool cannot be reset", () => {
@@ -111,10 +110,10 @@ test("logout removes the saved key even when a tool cannot be reset", () => {
   fs.writeFileSync(path.join(opencode, "opencode.json"), "{}");
   fs.writeFileSync(path.join(opencode, "opencode.jsonc"), "{}");
   const result = runCn(["logout"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(fs.existsSync(credentials(env)), false);
-  assert.match(result.stdout, /could not be reset/);
-  assert.ok(dir);
+  expect(result.status, result.stderr).toBe(0);
+  expect(fs.existsSync(credentials(env))).toBe(false);
+  expect(result.stdout).toMatch(/could not be reset/);
+  expect(dir).toBeTruthy();
 });
 
 test("a setup lock left by a dead process is cleared, a live one is respected", () => {
@@ -124,23 +123,17 @@ test("a setup lock left by a dead process is cleared, a live one is respected", 
 
   fs.mkdirSync(lock);
   fs.writeFileSync(path.join(lock, "pid"), String(dead));
-  assert.equal(
-    withSetupLock(directory, () => "ran"),
-    "ran",
-  );
-  assert.equal(fs.existsSync(lock), false, "the lock is released afterwards");
+  expect(withSetupLock(directory, () => "ran")).toBe("ran");
+  expect(fs.existsSync(lock), "the lock is released afterwards").toBe(false);
 
   fs.mkdirSync(lock);
   fs.writeFileSync(path.join(lock, "pid"), String(process.pid));
-  assert.throws(() => withSetupLock(directory, () => "ran"), /in progress/);
+  expect(() => withSetupLock(directory, () => "ran")).toThrow(/in progress/);
   fs.rmSync(lock, { recursive: true });
 
   // An old lock with no owner file (left by an older cn) is also stale.
   fs.mkdirSync(lock);
   const old = new Date(Date.now() - 60 * 60 * 1000);
   fs.utimesSync(lock, old, old);
-  assert.equal(
-    withSetupLock(directory, () => "ran"),
-    "ran",
-  );
+  expect(withSetupLock(directory, () => "ran")).toBe("ran");
 });

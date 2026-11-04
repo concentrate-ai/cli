@@ -1,8 +1,7 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   cursorDatabase,
   configureCursor,
@@ -13,18 +12,18 @@ import {
   CURSOR_KEY_ROW,
   CURSOR_SECRET_ROW,
   CURSOR_RECEIPT_ROW,
-} from "../dist/lib/cursor-config.js";
+} from "../src/lib/cursor-config.js";
 import {
   readDatabaseRows,
   changeDatabaseRows,
-} from "../dist/lib/sqlite-store.js";
+} from "../src/lib/sqlite-store.js";
 import {
   configureTool,
   resetTool,
   toolConfigured,
-} from "../dist/lib/tool-config.js";
-import { writeKey, writeJson } from "../dist/lib/settings.js";
-import { tempDir, runCn } from "./helpers.mjs";
+} from "../src/lib/tool-config.js";
+import { writeKey, writeJson } from "../src/lib/settings.js";
+import { tempDir, runCn } from "./helpers.js";
 
 const ROOT = "https://api.concentrate.ai";
 const models = [
@@ -70,7 +69,7 @@ function fixture() {
     input: sql,
     encoding: "utf8",
   });
-  assert.equal(out.status, 0, out.stderr);
+  expect(out.status, out.stderr).toBe(0);
   changeDatabaseRows(
     database,
     keys,
@@ -101,26 +100,26 @@ test("Cursor Configure populates tool models, preserves user models, and Reset r
   const f = fixture();
   const before = rowsOf(f);
   configureCursor(ROOT, "sk-dummy", models, f.env);
-  assert.equal(cursorConfigured(f.env), true);
+  expect(cursorConfigured(f.env)).toBe(true);
   const user = userOf(f);
-  assert.equal(user.openAIBaseUrl, `${ROOT}/v1`);
-  assert.equal(user.useOpenAIKey, true);
-  assert.deepEqual(user.aiSettings.userAddedModels, [
+  expect(user.openAIBaseUrl).toBe(`${ROOT}/v1`);
+  expect(user.useOpenAIKey).toBe(true);
+  expect(user.aiSettings.userAddedModels).toStrictEqual([
     "my-model",
     "test-tool-model",
   ]);
-  assert.deepEqual(user.aiSettings.modelOverrideEnabled, [
+  expect(user.aiSettings.modelOverrideEnabled).toStrictEqual([
     "my-model",
     "test-tool-model",
   ]);
-  assert.equal(rowsOf(f).get(CURSOR_KEY_ROW), "sk-dummy");
-  assert.equal(rowsOf(f).has(CURSOR_SECRET_ROW), false);
-  assert.equal(fs.statSync(f.database).mode & 0o777, 0o600);
+  expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("sk-dummy");
+  expect(rowsOf(f).has(CURSOR_SECRET_ROW)).toBe(false);
+  expect(fs.statSync(f.database).mode & 0o777).toBe(0o600);
   configureCursor(ROOT, "sk-dummy", models, f.env);
-  assert.equal(resetCursor(f.env).reset, true);
-  assert.deepEqual(userOf(f), initial);
-  assert.deepEqual(rowsOf(f), before);
-  assert.equal(resetCursor(f.env).reset, false);
+  expect(resetCursor(f.env).reset).toBe(true);
+  expect(userOf(f)).toStrictEqual(initial);
+  expect(rowsOf(f)).toStrictEqual(before);
+  expect(resetCursor(f.env).reset).toBe(false);
 });
 
 test("Cursor Reset keeps later changes to settings, model lists, and credentials", () => {
@@ -132,16 +131,16 @@ test("Cursor Reset keeps later changes to settings, model lists, and credentials
   edit(f, CURSOR_USER_ROW, JSON.stringify(user));
   edit(f, CURSOR_KEY_ROW, "different-key");
   const result = resetCursor(f.env);
-  assert.ok(result.preserved.includes("userAddedModels"));
-  assert.ok(result.preserved.some((v) => v.includes("API key")));
-  assert.equal(userOf(f).theme, "light");
-  assert.ok(userOf(f).aiSettings.userAddedModels.includes("later"));
-  assert.equal(rowsOf(f).get(CURSOR_KEY_ROW), "different-key");
-  assert.equal(cursorConfigured(f.env), false);
+  expect(result.preserved.includes("userAddedModels")).toBeTruthy();
+  expect(result.preserved.some((v) => v.includes("API key"))).toBeTruthy();
+  expect(userOf(f).theme).toBe("light");
+  expect(userOf(f).aiSettings.userAddedModels.includes("later")).toBeTruthy();
+  expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("different-key");
+  expect(cursorConfigured(f.env)).toBe(false);
   // Explicit Configure after Reset starts a new baseline using the preserved edits.
   configureCursor(ROOT, "sk-new", models, f.env);
   resetCursor(f.env);
-  assert.equal(rowsOf(f).get(CURSOR_KEY_ROW), "different-key");
+  expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("different-key");
 });
 
 test("Cursor Reset preserves an encrypted credential whose ownership cannot be verified", () => {
@@ -150,22 +149,20 @@ test("Cursor Reset preserves an encrypted credential whose ownership cannot be v
   edit(f, CURSOR_KEY_ROW, null);
   edit(f, CURSOR_SECRET_ROW, "new-encrypted-value");
   const result = resetCursor(f.env);
-  assert.ok(result.preserved.some((v) => v.includes("encrypted")));
-  assert.equal(rowsOf(f).get(CURSOR_SECRET_ROW), "new-encrypted-value");
+  expect(result.preserved.some((v) => v.includes("encrypted"))).toBeTruthy();
+  expect(rowsOf(f).get(CURSOR_SECRET_ROW)).toBe("new-encrypted-value");
 });
 
 test("Cursor key rotation keeps the first restore baseline and rejects edited keys", () => {
   const f = fixture();
   configureCursor(ROOT, "sk-dummy", models, f.env);
   refreshCursorKey("sk-rotated", f.env);
-  assert.equal(rowsOf(f).get(CURSOR_KEY_ROW), "sk-rotated");
+  expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("sk-rotated");
   edit(f, CURSOR_KEY_ROW, "user-edit");
-  assert.throws(
-    () => refreshCursorKey("sk-other", f.env),
+  expect(() => refreshCursorKey("sk-other", f.env)).toThrow(
     /edited or encrypted/,
   );
-  assert.throws(
-    () => configureCursor(ROOT, "sk-other", models, f.env),
+  expect(() => configureCursor(ROOT, "sk-other", models, f.env)).toThrow(
     /changed since Configure/,
   );
 });
@@ -174,19 +171,17 @@ test("Cursor settings update is atomic if a read row changed concurrently", () =
   const f = fixture();
   const stale = rowsOf(f);
   edit(f, "unrelated", "changed");
-  assert.throws(
-    () =>
-      changeDatabaseRows(
-        f.database,
-        keys,
-        stale,
-        new Map([[CURSOR_KEY_ROW, "must-not-commit"]]),
-        f.env,
-      ),
-    /No partial/,
-  );
-  assert.equal(rowsOf(f).has(CURSOR_KEY_ROW), false);
-  assert.equal(rowsOf(f).get("unrelated"), "changed");
+  expect(() =>
+    changeDatabaseRows(
+      f.database,
+      keys,
+      stale,
+      new Map([[CURSOR_KEY_ROW, "must-not-commit"]]),
+      f.env,
+    ),
+  ).toThrow(/No partial/);
+  expect(rowsOf(f).has(CURSOR_KEY_ROW)).toBe(false);
+  expect(rowsOf(f).get("unrelated")).toBe("changed");
 });
 
 test("Cursor rejects running processes, malformed settings, symlinks and empty catalogs", () => {
@@ -195,28 +190,24 @@ test("Cursor rejects running processes, malformed settings, symlinks and empty c
   fs.writeFileSync(path.join(f.bin, "pgrep"), "#!/bin/sh\nexit 0\n", {
     mode: 0o755,
   });
-  assert.throws(
-    () => configureCursor(ROOT, "sk-dummy", models, f.env),
+  expect(() => configureCursor(ROOT, "sk-dummy", models, f.env)).toThrow(
     /Quit Cursor/,
   );
-  assert.deepEqual(rowsOf(f), before);
+  expect(rowsOf(f)).toStrictEqual(before);
   fs.writeFileSync(path.join(f.bin, "pgrep"), "#!/bin/sh\nexit 1\n", {
     mode: 0o755,
   });
-  assert.throws(
-    () => configureCursor(ROOT, "sk-dummy", [], f.env),
+  expect(() => configureCursor(ROOT, "sk-dummy", [], f.env)).toThrow(
     /No tool-calling/,
   );
   edit(f, CURSOR_USER_ROW, '{"aiSettings":{"userAddedModels":42}}');
-  assert.throws(
-    () => configureCursor(ROOT, "sk-dummy", models, f.env),
+  expect(() => configureCursor(ROOT, "sk-dummy", models, f.env)).toThrow(
     /unsupported/,
   );
   const renamed = f.database + ".original";
   fs.renameSync(f.database, renamed);
   fs.symlinkSync(renamed, f.database);
-  assert.throws(
-    () => configureCursor(ROOT, "sk-dummy", models, f.env),
+  expect(() => configureCursor(ROOT, "sk-dummy", models, f.env)).toThrow(
     /symbolic link/,
   );
 });
@@ -231,23 +222,23 @@ test("Cursor CLI Configure/Reset and global Reset/Logout include desktop credent
       models,
     });
     await configureTool("cursor", f.env);
-    assert.equal(toolConfigured("cursor", f.env), true);
+    expect(toolConfigured("cursor", f.env)).toBe(true);
     if (operation === "named") {
       const result = runCn(["reset", "cursor"], { env: f.env });
-      assert.equal(result.status, 0, result.stderr);
+      expect(result.status, result.stderr).toBe(0);
       const configured = runCn(["configure", "cursor"], { env: f.env });
-      assert.equal(configured.status, 0, configured.stderr);
-      assert.match(configured.stdout, /Cursor's servers/);
+      expect(configured.status, configured.stderr).toBe(0);
+      expect(configured.stdout).toMatch(/Cursor's servers/);
       resetTool("cursor", f.env);
     } else {
       const result = runCn(
         operation === "reset" ? ["reset", "--yes"] : ["logout"],
         { env: f.env },
       );
-      assert.equal(result.status, 0, result.stderr);
+      expect(result.status, result.stderr).toBe(0);
     }
-    assert.deepEqual(userOf(f), initial);
-    assert.equal(rowsOf(f).get(CURSOR_SECRET_ROW), "original-encrypted-key");
+    expect(userOf(f)).toStrictEqual(initial);
+    expect(rowsOf(f).get(CURSOR_SECRET_ROW)).toBe("original-encrypted-key");
   }
 });
 
@@ -257,10 +248,10 @@ test("Cursor SQL values with quotes round-trip without executing their contents"
   user.theme = "I'm a quoted value; DROP TABLE ItemTable; --";
   edit(f, CURSOR_USER_ROW, JSON.stringify(user));
   configureCursor(ROOT, "sk-key'with-quote", models, f.env);
-  assert.equal(rowsOf(f).get(CURSOR_KEY_ROW), "sk-key'with-quote");
+  expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("sk-key'with-quote");
   resetCursor(f.env);
-  assert.equal(userOf(f).theme, user.theme);
-  assert.equal(rowsOf(f).get("unrelated"), "keep");
+  expect(userOf(f).theme).toBe(user.theme);
+  expect(rowsOf(f).get("unrelated")).toBe("keep");
 });
 
 test("Cursor rejects malformed restore records without changing credentials", () => {
@@ -268,8 +259,8 @@ test("Cursor rejects malformed restore records without changing credentials", ()
   configureCursor(ROOT, "sk-dummy", models, f.env);
   edit(f, CURSOR_RECEIPT_ROW, JSON.stringify({ version: 1, active: true }));
   const before = rowsOf(f);
-  assert.throws(() => resetCursor(f.env), /restore record is invalid/);
-  assert.deepEqual(rowsOf(f), before);
+  expect(() => resetCursor(f.env)).toThrow(/restore record is invalid/);
+  expect(rowsOf(f)).toStrictEqual(before);
 });
 
 test("Cursor accepts a home folder reached through a symlink but not links inside Cursor's own folders", () => {
@@ -278,17 +269,16 @@ test("Cursor accepts a home folder reached through a symlink but not links insid
   const alias = path.join(path.dirname(home), `alias-${path.basename(home)}`);
   fs.symlinkSync(home, alias);
   const viaAlias = { ...f.env, HOME: alias };
-  assert.doesNotThrow(() =>
+  expect(() =>
     configureCursor(ROOT, "sk-dummy", models, viaAlias),
-  );
-  assert.equal(cursorConfigured(viaAlias), true);
+  ).not.toThrow();
+  expect(cursorConfigured(viaAlias)).toBe(true);
   // A link on the path inside Cursor's data folder is still refused.
   const user = path.dirname(path.dirname(f.database));
   const moved = `${user}.real`;
   fs.renameSync(user, moved);
   fs.symlinkSync(moved, user);
-  assert.throws(
-    () => configureCursor(ROOT, "sk-dummy", models, f.env),
+  expect(() => configureCursor(ROOT, "sk-dummy", models, f.env)).toThrow(
     /symbolic link/,
   );
 });

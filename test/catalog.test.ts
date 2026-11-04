@@ -1,7 +1,6 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, test } from "node:test";
+import { afterEach, test, expect, onTestFinished } from "vitest";
 
 import {
   ensureModel,
@@ -9,9 +8,10 @@ import {
   modelsFor,
   summarize,
   validateKey,
-} from "../dist/lib/catalog.js";
-import { opencodeConfig, piConfig } from "../dist/lib/pickers.js";
-import { tempDir } from "./helpers.mjs";
+} from "../src/lib/catalog.js";
+import { opencodeConfig, piConfig } from "../src/lib/pickers.js";
+import { tempDir } from "./helpers.js";
+import { writeJson } from "../src/lib/settings.js";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -46,12 +46,12 @@ test("summarize maps integration flags and chat candidacy", () => {
       capabilities: { image_input: { supported: true } },
     }),
   );
-  assert.equal(model.claude, true);
-  assert.equal(model.codex, false);
-  assert.equal(model.chat_candidate, true);
-  assert.equal(model.image, true);
-  assert.equal(model.context, 1000);
-  assert.equal(summarize({ name: "no id" }), null);
+  expect(model.claude).toBe(true);
+  expect(model.codex).toBe(false);
+  expect(model.chat_candidate).toBe(true);
+  expect(model.image).toBe(true);
+  expect(model.context).toBe(1000);
+  expect(summarize({ name: "no id" })).toBe(null);
 });
 
 test("modelsFor filters by the tool's flag", () => {
@@ -59,27 +59,15 @@ test("modelsFor filters by the tool's flag", () => {
     { id: "a", claude: true, codex: false, chat_candidate: false },
     { id: "gpt-b", claude: false, codex: true, chat_candidate: true },
   ];
-  assert.deepEqual(
-    modelsFor("claude", models).map((m) => m.id),
-    ["a"],
-  );
-  assert.deepEqual(
-    modelsFor("codex", models).map((m) => m.id),
-    ["gpt-b"],
-  );
-  assert.deepEqual(
-    modelsFor("pi", models).map((m) => m.id),
-    ["gpt-b"],
-  );
+  expect(modelsFor("claude", models).map((m) => m.id)).toStrictEqual(["a"]);
+  expect(modelsFor("codex", models).map((m) => m.id)).toStrictEqual(["gpt-b"]);
+  expect(modelsFor("pi", models).map((m) => m.id)).toStrictEqual(["gpt-b"]);
 });
 
 test("ensureModel appends a selected model that is missing and leaves present ones", () => {
   const models = [{ id: "a", name: "A" }];
-  assert.equal(ensureModel(models, "a"), models);
-  assert.deepEqual(
-    ensureModel(models, "z").map((m) => m.id),
-    ["a", "z"],
-  );
+  expect(ensureModel(models, "a")).toBe(models);
+  expect(ensureModel(models, "z").map((m) => m.id)).toStrictEqual(["a", "z"]);
 });
 
 test("fetchCatalog follows pagination, sorts by id, and caches", async () => {
@@ -92,15 +80,12 @@ test("fetchCatalog follows pagination, sorts by id, and caches", async () => {
       : json({ data: [RAW("c"), RAW("b")], has_more: true, last_id: "b" });
   };
   const first = await fetchCatalog({ env });
-  assert.equal(first.source, "live");
-  assert.deepEqual(
-    first.models.map((m) => m.id),
-    ["a", "b", "c"],
-  );
-  assert.equal(urls.length, 2);
+  expect(first.source).toBe("live");
+  expect(first.models.map((m) => m.id)).toStrictEqual(["a", "b", "c"]);
+  expect(urls.length).toBe(2);
   const second = await fetchCatalog({ env });
-  assert.equal(second.source, "cache");
-  assert.equal(urls.length, 2);
+  expect(second.source).toBe("cache");
+  expect(urls.length).toBe(2);
 });
 
 test("fetchCatalog falls back to a stale cache when the network fails", async () => {
@@ -111,36 +96,34 @@ test("fetchCatalog falls back to a stale cache when the network fails", async ()
     throw new TypeError("network down");
   };
   const result = await fetchCatalog({ env, refresh: true });
-  assert.equal(result.source, "stale cache");
+  expect(result.source).toBe("stale cache");
 });
 
 test("fetchCatalog with no cache and no network throws a clear error", async () => {
   globalThis.fetch = async () => {
     throw new TypeError("network down");
   };
-  await assert.rejects(
+  await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: tempDir() } }),
-    /Could not fetch/,
-  );
+  ).rejects.toThrow(/Could not fetch/);
 });
 
 test("offline mode never touches the network", async () => {
-  globalThis.fetch = async () => assert.fail("fetch must not be called");
-  await assert.rejects(
+  globalThis.fetch = async () => expect.fail("fetch must not be called");
+  await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: tempDir(), CN_OFFLINE: "1" } }),
-    /offline mode/,
-  );
+  ).rejects.toThrow(/offline mode/);
 });
 
 test("validateKey distinguishes a rejected key from other failures", async () => {
   globalThis.fetch = async () => json({}, 401);
-  await assert.rejects(validateKey("bad"), /rejected this API key/);
+  await expect(validateKey("bad")).rejects.toThrow(/rejected this API key/);
   globalThis.fetch = async () => json({}, 503);
-  await assert.rejects(validateKey("k"), /HTTP 503/);
+  await expect(validateKey("k")).rejects.toThrow(/HTTP 503/);
   globalThis.fetch = async () => {
     throw new TypeError("offline");
   };
-  await assert.rejects(validateKey("k"), /could not reach/);
+  await expect(validateKey("k")).rejects.toThrow(/could not reach/);
   globalThis.fetch = async () => json({});
   await validateKey("good");
 });
@@ -150,23 +133,20 @@ test("catalog text is made inert and unusable entries are dropped", () => {
     id: "ok-1",
     display_name: "Nice \u001b]52;c;Y3VybA==\u0007\u001b[2J\u202eName",
   });
-  assert.equal(evil.name, "Nice ]52;c;Y3VybA==[2JName");
-  assert.ok(!/[\u0000-\u001f\u007f-\u009f\u202e]/.test(evil.name));
-  assert.equal(summarize({ id: "evil\u001b]0;x\u0007" }), null);
-  assert.equal(summarize({ id: "--flag" }), null);
-  assert.equal(
-    summarize({ id: "m", display_name: 123, name: { a: 1 } }).name,
+  expect(evil.name).toBe("Nice ]52;c;Y3VybA==[2JName");
+  expect(!/[\u0000-\u001f\u007f-\u009f\u202e]/.test(evil.name)).toBeTruthy();
+  expect(summarize({ id: "evil\u001b]0;x\u0007" })).toBe(null);
+  expect(summarize({ id: "--flag" })).toBe(null);
+  expect(summarize({ id: "m", display_name: 123, name: { a: 1 } }).name).toBe(
     "m",
   );
-  assert.equal(
+  expect(
     summarize({ id: "m", max_input_tokens: "lots", max_tokens: -5 }).context,
-    null,
-  );
+  ).toBe(null);
 });
 
 test("a malformed cache is filtered instead of crashing", async () => {
   const dir = tempDir();
-  const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
     version: 6,
     fetchedAt: Date.now() / 1000,
@@ -181,10 +161,9 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const { models } = await fetchCatalog({
     env: { CN_CONFIG_HOME: dir, CN_OFFLINE: "1" },
   });
-  assert.deepEqual(
-    models.map((m) => [m.id, m.name, m.claude]),
-    [["good", "good", false]],
-  );
+  expect(models.map((m) => [m.id, m.name, m.claude])).toStrictEqual([
+    ["good", "good", false],
+  ]);
 });
 
 test("reasoning metadata is provider-specific and conservative for automatic routing", () => {
@@ -218,11 +197,16 @@ test("reasoning metadata is provider-specific and conservative for automatic rou
       },
     }),
   );
-  assert.deepEqual(m.efforts, ["none", "low", "medium"]);
-  assert.deepEqual(m.variants[0].efforts, ["none", "low", "medium", "high"]);
-  assert.equal(m.reasoningSupport, true);
-  assert.equal(summarize(RAW("unknown")).reasoningSupport, null);
-  assert.equal(summarize(RAW("unknown")).efforts, null);
+  expect(m.efforts).toStrictEqual(["none", "low", "medium"]);
+  expect(m.variants[0].efforts).toStrictEqual([
+    "none",
+    "low",
+    "medium",
+    "high",
+  ]);
+  expect(m.reasoningSupport).toBe(true);
+  expect(summarize(RAW("unknown")).reasoningSupport).toBe(null);
+  expect(summarize(RAW("unknown")).efforts).toBe(null);
 });
 
 const catalogPage = () =>
@@ -230,43 +214,35 @@ const catalogPage = () =>
 
 test("a catalog that was fetched is returned even when the cache cannot be written", async (t) => {
   if (process.getuid?.() === 0) return t.skip("root ignores directory modes");
-  const fs = await import("node:fs");
   const dir = tempDir();
   fs.chmodSync(dir, 0o500);
-  t.after(() => fs.chmodSync(dir, 0o700));
+  onTestFinished(() => fs.chmodSync(dir, 0o700));
   globalThis.fetch = async () => catalogPage();
   const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
-  assert.equal(result.source, "live");
-  assert.deepEqual(
-    result.models.map((m) => m.id),
-    ["live-model"],
-  );
+  expect(result.source).toBe("live");
+  expect(result.models.map((m) => m.id)).toStrictEqual(["live-model"]);
 });
 
 test("a cache from another format version is never served, even offline", async () => {
   const dir = tempDir();
-  const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
     version: 1,
     fetchedAt: Date.now() / 1000,
     models: [{ id: "old-format" }],
   });
-  await assert.rejects(
+  await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: dir, CN_OFFLINE: "1" } }),
-    /unavailable in offline mode/,
-  );
+  ).rejects.toThrow(/unavailable in offline mode/);
   globalThis.fetch = async () => {
     throw new Error("network down");
   };
-  await assert.rejects(
-    fetchCatalog({ env: { CN_CONFIG_HOME: dir } }),
+  await expect(fetchCatalog({ env: { CN_CONFIG_HOME: dir } })).rejects.toThrow(
     /Could not fetch/,
   );
 });
 
 test("a cache dated in the future is refreshed rather than trusted forever", async () => {
   const dir = tempDir();
-  const { writeJson } = await import("../dist/lib/settings.js");
   writeJson(`${dir}/catalog.json`, {
     version: 6,
     fetchedAt: 9e12,
@@ -274,11 +250,8 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
   });
   globalThis.fetch = async () => catalogPage();
   const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
-  assert.equal(result.source, "live");
-  assert.deepEqual(
-    result.models.map((m) => m.id),
-    ["live-model"],
-  );
+  expect(result.source).toBe("live");
+  expect(result.models.map((m) => m.id)).toStrictEqual(["live-model"]);
 });
 
 test("catalog prices become dollars per million tokens for Pi", () => {
@@ -308,19 +281,19 @@ test("catalog prices become dollars per million tokens for Pi", () => {
       },
     },
   });
-  assert.deepEqual(entry.cost, {
+  expect(entry.cost).toStrictEqual({
     input: 2,
     output: 10,
     cacheRead: 0.1,
     cacheWrite: 2.5,
   });
-  assert.deepEqual(entry.variants[0].cost, entry.cost);
+  expect(entry.variants[0].cost).toStrictEqual(entry.cost);
   const pi = piConfig("https://x", [entry]).providers.concentrate.models[0];
-  assert.deepEqual(pi.cost, entry.cost);
+  expect(pi.cost).toStrictEqual(entry.cost);
   const price = { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 };
   const old = opencodeConfig("https://x", "m", [entry]).provider.concentrate
     .models.m.cost;
-  assert.deepEqual(old, {
+  expect(old).toStrictEqual({
     input: 2,
     output: 10,
     cache_read: 0.1,
@@ -328,12 +301,12 @@ test("catalog prices become dollars per million tokens for Pi", () => {
   });
   const modern = opencodeConfig("https://x", "m", [entry], { modern: true })
     .providers.concentrate.models.m.cost;
-  assert.deepEqual(modern, {
+  expect(modern).toStrictEqual({
     input: price.input,
     output: price.output,
     cache: { read: 0.1, write: 2.5 },
   });
-  assert.equal(summarize({ id: "n", name: "N" }).cost, null);
+  expect(summarize({ id: "n", name: "N" }).cost).toBe(null);
 });
 
 test("cache-write prices are read under any field name, preferring Claude's 5-minute price", () => {
@@ -356,18 +329,16 @@ test("cache-write prices are read under any field name, preferring Claude's 5-mi
         },
       },
     }).cost.cacheWrite;
-  assert.equal(
+  expect(
     withWrite({ cache_write_tokens: { price: { USD: 2.5 }, units: 1000000 } }),
-    2.5,
-  );
-  assert.equal(
+  ).toBe(2.5);
+  expect(
     withWrite({
       ephemeral_1h_input_tokens: { price: { USD: 4 }, units: 1000000 },
       ephemeral_5m_input_tokens: { price: { USD: 2.5 }, units: 1000000 },
     }),
-    2.5,
-  );
-  assert.equal(withWrite(undefined), 0);
+  ).toBe(2.5);
+  expect(withWrite(undefined)).toBe(0);
 });
 
 test("a cache from before prices is still used offline, but refreshed when online", async () => {
@@ -382,12 +353,9 @@ test("a cache from before prices is still used offline, but refreshed when onlin
     }),
   );
   const { models, source } = await fetchCatalog({ env });
-  assert.equal(source, "offline cache");
-  assert.deepEqual(
-    models.map((m) => m.id),
-    ["old-model"],
-  );
-  assert.equal(models[0].cost, null);
+  expect(source).toBe("offline cache");
+  expect(models.map((m) => m.id)).toStrictEqual(["old-model"]);
+  expect(models[0].cost).toBe(null);
 });
 
 test("prices come from the standard tier, with input-size tiers kept for Pi", () => {
@@ -416,9 +384,9 @@ test("prices come from the standard tier, with input-size tiers kept for Pi", ()
       },
     },
   });
-  assert.equal(entry.cost.input, 5, "the scheduled price that has started");
-  assert.equal(entry.cost.output, 25);
-  assert.deepEqual(entry.cost.tiers, [
+  expect(entry.cost.input, "the scheduled price that has started").toBe(5);
+  expect(entry.cost.output).toBe(25);
+  expect(entry.cost.tiers).toStrictEqual([
     {
       input: 6,
       output: 30,
@@ -428,5 +396,5 @@ test("prices come from the standard tier, with input-size tiers kept for Pi", ()
     },
   ]);
   const pi = piConfig("https://x", [entry]).providers.concentrate.models[0];
-  assert.deepEqual(pi.cost.tiers, entry.cost.tiers);
+  expect(pi.cost.tiers).toStrictEqual(entry.cost.tiers);
 });

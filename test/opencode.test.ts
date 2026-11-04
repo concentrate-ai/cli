@@ -1,11 +1,10 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 
-import { withStandalone } from "../dist/lib/harnesses/opencode.js";
-import { opencodeConfig } from "../dist/lib/pickers.js";
-import { runCn, tempDir } from "./helpers.mjs";
+import { withStandalone } from "../src/lib/harnesses/opencode.js";
+import { opencodeConfig } from "../src/lib/pickers.js";
+import { runCn, tempDir } from "./helpers.js";
 
 // Stand-in OpenCode. FAKE_OC=v2 makes --help advertise --standalone, as the real v2 does.
 function rig(version) {
@@ -35,10 +34,10 @@ fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, config: proce
 
 test("v2: the private-server flag is added, after the subcommand when there is one", () => {
   const { env, seen } = rig("v2");
-  assert.equal(runCn(["opencode"], { env }).status, 0);
-  assert.deepEqual(seen().args, ["--standalone"]);
+  expect(runCn(["opencode"], { env }).status).toBe(0);
+  expect(seen().args).toStrictEqual(["--standalone"]);
   runCn(["opencode", "--", "run", "say hi", "--format", "json"], { env });
-  assert.deepEqual(seen().args, [
+  expect(seen().args).toStrictEqual([
     "run",
     "--standalone",
     "say hi",
@@ -46,15 +45,19 @@ test("v2: the private-server flag is added, after the subcommand when there is o
     "json",
   ]);
   runCn(["opencode", "--", "--continue"], { env });
-  assert.deepEqual(seen().args, ["--standalone", "--session", "ses_existing"]);
+  expect(seen().args).toStrictEqual([
+    "--standalone",
+    "--session",
+    "ses_existing",
+  ]);
 });
 
 test("v1: the flag is never passed, because v1 rejects it", () => {
   const { env, seen } = rig("v1");
-  assert.equal(runCn(["opencode", "--", "run", "say hi"], { env }).status, 0);
-  assert.deepEqual(seen().args, ["run", "say hi"]);
+  expect(runCn(["opencode", "--", "run", "say hi"], { env }).status).toBe(0);
+  expect(seen().args).toStrictEqual(["run", "say hi"]);
   runCn(["opencode"], { env });
-  assert.deepEqual(seen().args, []);
+  expect(seen().args).toStrictEqual([]);
 });
 
 test("v1 resume explicitly selects the Concentrate model instead of the session's former provider", () => {
@@ -63,8 +66,8 @@ test("v1 resume explicitly selects the Concentrate model instead of the session'
     ["opencode", "--model", "chosen", "resume", "ses_existing"],
     { env },
   );
-  assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(seen().args, [
+  expect(result.status, result.stderr).toBe(0);
+  expect(seen().args).toStrictEqual([
     "--model",
     "concentrate/chosen",
     "--session",
@@ -78,26 +81,26 @@ test("both versions get native provider config, with the key by reference only",
     runCn(["opencode", "--model", "claude-opus-4-6"], { env });
     const { config, key } = seen();
     const parsed = JSON.parse(config);
-    assert.equal(parsed.model, "concentrate/claude-opus-4-6");
+    expect(parsed.model).toBe("concentrate/claude-opus-4-6");
     const provider = (parsed.providers ?? parsed.provider).concentrate;
-    assert.equal(
-      provider.package ?? provider.npm,
+    expect(provider.package ?? provider.npm).toBe(
       version === "v2" ? "@opencode/ai/providers/openai" : "@ai-sdk/openai",
     );
-    assert.equal(
-      (provider.settings ?? provider.options).baseURL,
+    expect((provider.settings ?? provider.options).baseURL).toBe(
       "https://api.concentrate.ai/v1",
     );
-    assert.equal(
-      (provider.settings ?? provider.options).apiKey,
+    expect((provider.settings ?? provider.options).apiKey).toBe(
       "{env:CONCENTRATE_API_KEY}",
     );
-    assert.ok(provider.models["claude-opus-4-6"], "selected model is listed");
-    assert.equal(key, "sk-test");
-    assert.ok(
+    expect(
+      provider.models["claude-opus-4-6"],
+      "selected model is listed",
+    ).toBeTruthy();
+    expect(key).toBe("sk-test");
+    expect(
       !config.includes("sk-test"),
       "the key is not written into the config",
-    );
+    ).toBeTruthy();
   }
 });
 
@@ -108,7 +111,7 @@ test("the config uses no v1-only model fields that v2 would warn about", () => {
     [{ id: "m", name: "M", context: 1000, reasoning: true, image: true }],
     { modern: true },
   );
-  assert.deepEqual(config.providers.concentrate.models.m, {
+  expect(config.providers.concentrate.models.m).toStrictEqual({
     name: "M",
     limit: { context: 1000 },
     capabilities: {
@@ -120,16 +123,19 @@ test("the config uses no v1-only model fields that v2 would warn about", () => {
 });
 
 test("withStandalone keeps argument order", () => {
-  assert.deepEqual(withStandalone([]), ["--standalone"]);
-  assert.deepEqual(withStandalone(["run", "x"]), ["run", "--standalone", "x"]);
-  assert.deepEqual(withStandalone(["-c"]), ["--standalone", "-c"]);
+  expect(withStandalone([])).toStrictEqual(["--standalone"]);
+  expect(withStandalone(["run", "x"])).toStrictEqual([
+    "run",
+    "--standalone",
+    "x",
+  ]);
+  expect(withStandalone(["-c"])).toStrictEqual(["--standalone", "-c"]);
 });
 
 test("doctor shows which OpenCode version is installed", () => {
   const v2 = runCn(["doctor"], { env: rig("v2").env });
-  assert.match(v2.stdout, /OpenCode\s+\S+opencode\s+opencode v2\.0\.20/);
-  assert.match(
-    runCn(["doctor"], { env: rig("v1").env }).stdout,
+  expect(v2.stdout).toMatch(/OpenCode\s+\S+opencode\s+opencode v2\.0\.20/);
+  expect(runCn(["doctor"], { env: rig("v1").env }).stdout).toMatch(
     /OpenCode\s+\S+opencode\s+1\.19\.0/,
   );
 });

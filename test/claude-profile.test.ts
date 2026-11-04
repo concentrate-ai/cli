@@ -1,9 +1,8 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
-import { prepareClaudeProfile } from "../dist/lib/claude-profile.js";
-import { tempDir } from "./helpers.mjs";
+import { test, expect } from "vitest";
+import { prepareClaudeProfile } from "../src/lib/claude-profile.js";
+import { tempDir } from "./helpers.js";
 
 test("Claude profile isolates settings while sharing conversation files", () => {
   const root = tempDir("cn-profile-test-");
@@ -31,52 +30,46 @@ test("Claude profile isolates settings while sharing conversation files", () => 
   fs.writeFileSync(session, "existing conversation\n");
   const profile = prepareClaudeProfile({ CLAUDE_CONFIG_DIR: source });
   try {
-    assert.equal(
+    expect(
       fs
         .lstatSync(path.join(profile.directory, "settings.json"))
         .isSymbolicLink(),
-      false,
-    );
+    ).toBe(false);
     fs.writeFileSync(
       path.join(profile.directory, "settings.json"),
       '{"model":"deepseek"}',
     );
-    assert.equal(
-      fs.readFileSync(path.join(root, "settings.json"), "utf8"),
+    expect(fs.readFileSync(path.join(root, "settings.json"), "utf8")).toBe(
       '{"model":"sonnet","theme":"dark"}',
     );
-    assert.equal(
+    expect(
       fs.existsSync(path.join(profile.directory, ".credentials.json")),
-      false,
-    );
-    assert.equal(
+    ).toBe(false);
+    expect(
       fs.readFileSync(
         path.join(profile.directory, "projects", "project", "existing.jsonl"),
         "utf8",
       ),
-      "existing conversation\n",
-    );
+    ).toBe("existing conversation\n");
     fs.appendFileSync(
       path.join(profile.directory, "projects", "project", "existing.jsonl"),
       "continued\n",
     );
-    assert.equal(
-      fs.readFileSync(session, "utf8"),
+    expect(fs.readFileSync(session, "utf8")).toBe(
       "existing conversation\ncontinued\n",
     );
     fs.writeFileSync(
       path.join(profile.directory, "skills", "skill.md"),
       "changed copy",
     );
-    assert.equal(
+    expect(
       fs.readFileSync(path.join(source, "skills", "skill.md"), "utf8"),
-      "original skill",
-    );
+    ).toBe("original skill");
   } finally {
     profile.cleanup();
   }
-  assert.equal(fs.existsSync(profile.directory), false);
-  assert.equal(fs.existsSync(session), true);
+  expect(fs.existsSync(profile.directory)).toBe(false);
+  expect(fs.existsSync(session)).toBe(true);
 });
 test("cn claude launches share one device ID, so the prompt cache stays warm", () => {
   const root = tempDir("cn-profile-device-");
@@ -91,8 +84,8 @@ test("cn claude launches share one device ID, so the prompt cache stays warm", (
       profile.cleanup();
     }
   });
-  assert.match(ids[0], /^[0-9a-f]{64}$/);
-  assert.equal(ids[0], ids[1]);
+  expect(ids[0]).toMatch(/^[0-9a-f]{64}$/);
+  expect(ids[0]).toBe(ids[1]);
   // The user's own ID, when Claude already made one, is kept.
   fs.writeFileSync(
     path.join(root, ".claude.json"),
@@ -103,8 +96,8 @@ test("cn claude launches share one device ID, so the prompt cache stays warm", (
     const doc = JSON.parse(
       fs.readFileSync(path.join(profile.directory, ".claude.json"), "utf8"),
     );
-    assert.equal(doc.userID, "mine");
-    assert.equal(doc.theme, "dark");
+    expect(doc.userID).toBe("mine");
+    expect(doc.theme).toBe("dark");
   } finally {
     profile.cleanup();
   }

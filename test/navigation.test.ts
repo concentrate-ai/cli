@@ -1,8 +1,7 @@
-import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
-import { BIN } from "./helpers.mjs";
+import { test, expect } from "vitest";
+import { BIN } from "./helpers.js";
 
 const python = spawnSync("python3", ["--version"]);
 test(
@@ -16,7 +15,7 @@ test(
       encoding: "utf8",
       timeout: 25000,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   },
 );
 test(
@@ -30,7 +29,7 @@ test(
       encoding: "utf8",
       timeout: 20000,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   },
 );
 test(
@@ -46,7 +45,7 @@ test(
       encoding: "utf8",
       timeout: 30000,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   },
 );
 
@@ -61,7 +60,7 @@ test(
       encoding: "utf8",
       timeout: 20000,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   },
 );
 
@@ -79,6 +78,6 @@ test(
       encoding: "utf8",
       timeout: 30000,
     });
-    assert.equal(result.status, 0, result.stderr || result.stdout);
+    expect(result.status, result.stderr || result.stdout).toBe(0);
   },
 );

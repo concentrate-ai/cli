@@ -1,14 +1,13 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 import {
   opencodeConfig,
   piConfig,
   writeCodexCatalog,
-} from "../dist/lib/pickers.js";
-import { summarize } from "../dist/lib/catalog.js";
-import { fakeTool, tempDir } from "./helpers.mjs";
+} from "../src/lib/pickers.js";
+import { summarize } from "../src/lib/catalog.js";
+import { fakeTool, tempDir } from "./helpers.js";
 
 const models = [
   {
@@ -49,36 +48,41 @@ for (const modern of [false, true]) {
       modern,
     });
     const catalog = (config.providers ?? config.provider).concentrate.models;
-    assert.deepEqual(catalog.small.limit, { context: 32768, output: 4096 });
-    assert.deepEqual(catalog.large.limit, { context: 400000, output: 64000 });
-    assert.equal(catalog.unknown.limit, undefined);
+    expect(catalog.small.limit).toStrictEqual({ context: 32768, output: 4096 });
+    expect(catalog.large.limit).toStrictEqual({
+      context: 400000,
+      output: 64000,
+    });
+    expect(catalog.unknown.limit).toBe(undefined);
     if (modern) {
-      assert.deepEqual(catalog.small.capabilities.input, ["text"]);
-      assert.deepEqual(catalog.large.capabilities.input, ["text", "image"]);
-      assert.equal(catalog.small.capabilities.reasoning.supported, false);
-      assert.deepEqual(catalog.large.capabilities.reasoning, {
+      expect(catalog.small.capabilities.input).toStrictEqual(["text"]);
+      expect(catalog.large.capabilities.input).toStrictEqual(["text", "image"]);
+      expect(catalog.small.capabilities.reasoning.supported).toBe(false);
+      expect(catalog.large.capabilities.reasoning).toStrictEqual({
         supported: true,
         effort: ["low", "medium", "max"],
         toggle: true,
       });
-      assert.deepEqual(
-        catalog.large.variants.map((entry) => entry.id),
-        ["none", "low", "medium", "max"],
-      );
-      assert.equal(catalog.large.variants.at(-1).body.reasoning.effort, "max");
-      assert.equal(catalog.unknown.capabilities.reasoning, undefined);
-      assert.equal(catalog.large.modalities, undefined);
-    } else {
-      assert.equal(catalog.small.reasoning, false);
-      assert.deepEqual(catalog.large.modalities.input, ["text", "image"]);
-      assert.deepEqual(Object.keys(catalog.large.variants), [
+      expect(catalog.large.variants.map((entry) => entry.id)).toStrictEqual([
         "none",
         "low",
         "medium",
         "max",
       ]);
-      assert.equal(catalog.large.variants.max.reasoningEffort, "max");
-      assert.equal(catalog.unknown.reasoning, undefined);
+      expect(catalog.large.variants.at(-1).body.reasoning.effort).toBe("max");
+      expect(catalog.unknown.capabilities.reasoning).toBe(undefined);
+      expect(catalog.large.modalities).toBe(undefined);
+    } else {
+      expect(catalog.small.reasoning).toBe(false);
+      expect(catalog.large.modalities.input).toStrictEqual(["text", "image"]);
+      expect(Object.keys(catalog.large.variants)).toStrictEqual([
+        "none",
+        "low",
+        "medium",
+        "max",
+      ]);
+      expect(catalog.large.variants.max.reasoningEffort).toBe("max");
+      expect(catalog.unknown.reasoning).toBe(undefined);
     }
   });
 }
@@ -86,12 +90,12 @@ for (const modern of [false, true]) {
 test("Pi limits and thinking choices follow each model without inventing missing metadata", () => {
   const [small, large, unknown] = piConfig("https://example.test", models)
     .providers.concentrate.models;
-  assert.equal(small.contextWindow, 32768);
-  assert.equal(small.maxTokens, 4096);
-  assert.equal(small.reasoning, false);
-  assert.equal(large.contextWindow, 400000);
-  assert.equal(large.maxTokens, 64000);
-  assert.deepEqual(large.thinkingLevelMap, {
+  expect(small.contextWindow).toBe(32768);
+  expect(small.maxTokens).toBe(4096);
+  expect(small.reasoning).toBe(false);
+  expect(large.contextWindow).toBe(400000);
+  expect(large.maxTokens).toBe(64000);
+  expect(large.thinkingLevelMap).toStrictEqual({
     off: "none",
     minimal: null,
     low: "low",
@@ -100,14 +104,14 @@ test("Pi limits and thinking choices follow each model without inventing missing
     xhigh: null,
     max: "max",
   });
-  assert.equal(unknown.contextWindow, undefined);
-  assert.equal(unknown.maxTokens, undefined);
-  assert.equal(unknown.thinkingLevelMap, undefined);
+  expect(unknown.contextWindow).toBe(undefined);
+  expect(unknown.maxTokens).toBe(undefined);
+  expect(unknown.thinkingLevelMap).toBe(undefined);
   const mandatory = piConfig("https://example.test", [
     { ...models[1], efforts: ["high"] },
   ]).providers.concentrate.models[0];
-  assert.equal(mandatory.thinkingLevelMap.off, null);
-  assert.equal(mandatory.thinkingLevelMap.high, "high");
+  expect(mandatory.thinkingLevelMap.off).toBe(null);
+  expect(mandatory.thinkingLevelMap.high).toBe("high");
 });
 
 test("Codex catalog advertises actual per-model reasoning choices and defaults", () => {
@@ -120,26 +124,24 @@ test("Codex catalog advertises actual per-model reasoning choices and defaults",
     path.join(dir, "models.json"),
   );
   const [small, large, unknown] = JSON.parse(fs.readFileSync(file)).models;
-  assert.equal(small.context_window, 32768);
-  assert.deepEqual(small.supported_reasoning_levels, []);
-  assert.equal(large.context_window, 400000);
-  assert.equal(large.max_context_window, 400000);
-  assert.equal(large.shell_type, "unified_exec");
-  assert.equal(large.base_instructions, "Bundled coding instructions");
-  assert.deepEqual(large.future_catalog_field, { preserved: true });
-  assert.equal(
-    large.model_messages.instructions_template,
+  expect(small.context_window).toBe(32768);
+  expect(small.supported_reasoning_levels).toStrictEqual([]);
+  expect(large.context_window).toBe(400000);
+  expect(large.max_context_window).toBe(400000);
+  expect(large.shell_type).toBe("unified_exec");
+  expect(large.base_instructions).toBe("Bundled coding instructions");
+  expect(large.future_catalog_field).toStrictEqual({ preserved: true });
+  expect(large.model_messages.instructions_template).toBe(
     "You are a coding agent. Use the tools.",
   );
-  assert.equal(large.use_responses_lite, false);
-  assert.equal(unknown.context_window, 272000);
-  assert.deepEqual(
+  expect(large.use_responses_lite).toBe(false);
+  expect(unknown.context_window).toBe(272000);
+  expect(
     large.supported_reasoning_levels.map((level) => level.effort),
-    ["none", "low", "medium", "max"],
-  );
-  assert.equal(large.default_reasoning_level, "medium");
-  assert.deepEqual(large.input_modalities, ["text", "image"]);
-  assert.deepEqual(unknown.supported_reasoning_levels, []);
+  ).toStrictEqual(["none", "low", "medium", "max"]);
+  expect(large.default_reasoning_level).toBe("medium");
+  expect(large.input_modalities).toStrictEqual(["text", "image"]);
+  expect(unknown.supported_reasoning_levels).toStrictEqual([]);
 });
 
 test("an unreadable bundled Codex catalog leaves the destination untouched", () => {
@@ -150,11 +152,10 @@ test("an unreadable bundled Codex catalog leaves the destination untouched", () 
   fs.writeFileSync(executable, "#!/bin/sh\nprintf '%s' 'not JSON'\n", {
     mode: 0o755,
   });
-  assert.throws(
-    () => writeCodexCatalog(executable, models, destination),
+  expect(() => writeCodexCatalog(executable, models, destination)).toThrow(
     /bundled model catalog/,
   );
-  assert.equal(fs.readFileSync(destination, "utf8"), "previous catalog");
+  expect(fs.readFileSync(destination, "utf8")).toBe("previous catalog");
 });
 
 test("Codex catalog validation accepts output larger than the subprocess buffer", () => {
@@ -166,7 +167,7 @@ test("Codex catalog validation accepts output larger than the subprocess buffer"
     { mode: 0o755 },
   );
   const destination = path.join(dir, "models.json");
-  assert.equal(writeCodexCatalog(executable, models, destination), destination);
+  expect(writeCodexCatalog(executable, models, destination)).toBe(destination);
 });
 
 const claudeEntry = (id, efforts) => ({
@@ -189,17 +190,17 @@ test("Pi sends Claude to the Messages endpoint and everything else to Responses"
     claudeEntry("claude-sonnet-4-5", ["none", "low", "high"]),
     { ...claudeEntry("gpt-6.1-terra", ["low", "high"]), claude: false },
   ]).providers.concentrate;
-  assert.equal(provider.api, "openai-responses");
+  expect(provider.api).toBe("openai-responses");
   const [opus, sonnet, gpt] = provider.models;
-  assert.equal(opus.api, "anthropic-messages");
-  assert.equal(opus.baseUrl, "https://gw.test");
-  assert.deepEqual(opus.compat, { forceAdaptiveThinking: true });
-  assert.equal(sonnet.compat, undefined, "Claude before 4.6 uses budgets");
-  assert.equal(gpt.api, undefined);
+  expect(opus.api).toBe("anthropic-messages");
+  expect(opus.baseUrl).toBe("https://gw.test");
+  expect(opus.compat).toStrictEqual({ forceAdaptiveThinking: true });
+  expect(sonnet.compat, "Claude before 4.6 uses budgets").toBe(undefined);
+  expect(gpt.api).toBe(undefined);
   const [old] = piConfig("https://gw.test", [
     claudeEntry("claude-opus-4-1", ["low", "high"]),
   ]).providers.concentrate.models;
-  assert.equal(old.api, undefined, "Claude before 4.5 stays on Responses");
+  expect(old.api, "Claude before 4.5 stays on Responses").toBe(undefined);
 });
 
 test("OpenCode sends Claude through its Anthropic package in both versions", () => {
@@ -211,38 +212,38 @@ test("OpenCode sends Claude through its Anthropic package in both versions", () 
   const modern = opencodeConfig("https://gw.test", "claude-opus-5-5", models, {
     modern: true,
   }).providers.concentrate;
-  assert.equal(modern.package, "@opencode/ai/providers/openai");
+  expect(modern.package).toBe("@opencode/ai/providers/openai");
   const opus = modern.models["claude-opus-5-5"];
-  assert.equal(opus.package, "@opencode/ai/providers/anthropic");
-  assert.deepEqual(opus.settings, { baseURL: "https://gw.test/v1" });
-  assert.deepEqual(opus.variants[1], {
+  expect(opus.package).toBe("@opencode/ai/providers/anthropic");
+  expect(opus.settings).toStrictEqual({ baseURL: "https://gw.test/v1" });
+  expect(opus.variants[1]).toStrictEqual({
     id: "high",
     body: { output_config: { effort: "high" } },
   });
-  assert.deepEqual(modern.models["claude-sonnet-4-5"].variants, [
+  expect(modern.models["claude-sonnet-4-5"].variants).toStrictEqual([
     { id: "none", body: { thinking: { type: "disabled" } } },
     {
       id: "high",
       body: { thinking: { type: "enabled", budget_tokens: 16384 } },
     },
   ]);
-  assert.equal(modern.models["gpt-6.1-terra"].package, undefined);
-  assert.deepEqual(modern.models["gpt-6.1-terra"].variants[1].body, {
+  expect(modern.models["gpt-6.1-terra"].package).toBe(undefined);
+  expect(modern.models["gpt-6.1-terra"].variants[1].body).toStrictEqual({
     reasoning: { effort: "high" },
   });
   const legacy = opencodeConfig("https://gw.test", "claude-opus-5-5", models)
     .provider.concentrate;
-  assert.equal(legacy.npm, "@ai-sdk/openai");
-  assert.deepEqual(legacy.models["claude-opus-5-5"].provider, {
+  expect(legacy.npm).toBe("@ai-sdk/openai");
+  expect(legacy.models["claude-opus-5-5"].provider).toStrictEqual({
     npm: "@ai-sdk/anthropic",
   });
-  assert.deepEqual(legacy.models["claude-opus-5-5"].variants.high, {
+  expect(legacy.models["claude-opus-5-5"].variants.high).toStrictEqual({
     effort: "high",
   });
-  assert.deepEqual(legacy.models["claude-sonnet-4-5"].variants.high, {
+  expect(legacy.models["claude-sonnet-4-5"].variants.high).toStrictEqual({
     thinking: { type: "enabled", budgetTokens: 16384 },
   });
-  assert.equal(legacy.models["gpt-6.1-terra"].provider, undefined);
+  expect(legacy.models["gpt-6.1-terra"].provider).toBe(undefined);
 });
 
 test("OpenCode gets tool calling, PDF input and release dates in each version's field names", () => {
@@ -264,16 +265,16 @@ test("OpenCode gets tool calling, PDF input and release dates in each version's 
       },
     },
   });
-  assert.equal(raw.released, "2026-09-22");
-  assert.equal(raw.variants[0].pdf, true);
+  expect(raw.released).toBe("2026-09-22");
+  expect(raw.variants[0].pdf).toBe(true);
   const legacy = opencodeConfig("https://gw.test", "m", [raw]).provider
     .concentrate.models.m;
-  assert.equal(legacy.tool_call, true);
-  assert.equal(legacy.toolcall, undefined);
-  assert.equal(legacy.release_date, "2026-09-22");
-  assert.deepEqual(legacy.modalities.input, ["text", "image", "pdf"]);
+  expect(legacy.tool_call).toBe(true);
+  expect(legacy.toolcall).toBe(undefined);
+  expect(legacy.release_date).toBe("2026-09-22");
+  expect(legacy.modalities.input).toStrictEqual(["text", "image", "pdf"]);
   const modern = opencodeConfig("https://gw.test", "m", [raw], { modern: true })
     .providers.concentrate.models.m;
-  assert.equal(modern.releaseDate, "2026-09-22");
-  assert.deepEqual(modern.capabilities.input, ["text", "image", "pdf"]);
+  expect(modern.releaseDate).toBe("2026-09-22");
+  expect(modern.capabilities.input).toStrictEqual(["text", "image", "pdf"]);
 });

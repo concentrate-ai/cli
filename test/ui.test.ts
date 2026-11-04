@@ -1,12 +1,20 @@
-import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 
-import { wordmark } from "../dist/lib/ui/brand.js";
-import { ledger, panel } from "../dist/lib/ui/layout.js";
-import { renderKeyEntry } from "../dist/lib/ui/onboarding.js";
-import { contextBar, formatTokens } from "../dist/lib/ui/models.js";
-import { caps, fit, paint, strip, visibleWidth } from "../dist/lib/ui/term.js";
-import { glyphs } from "../dist/lib/ui/theme.js";
+import { wordmark, header } from "../src/lib/ui/brand.js";
+import { ledger, panel } from "../src/lib/ui/layout.js";
+import { renderKeyEntry } from "../src/lib/ui/onboarding.js";
+import { contextBar, formatTokens } from "../src/lib/ui/models.js";
+import {
+  caps,
+  fit,
+  paint,
+  strip,
+  visibleWidth,
+  surface,
+  SURFACE,
+  clip,
+} from "../src/lib/ui/term.js";
+import { glyphs } from "../src/lib/ui/theme.js";
 import {
   createSelect,
   parseKeys,
@@ -14,7 +22,9 @@ import {
   renderSelect,
   renderWorkspace,
   visible,
-} from "../dist/lib/ui/widgets.js";
+  wrap,
+} from "../src/lib/ui/widgets.js";
+import { openScreen, fullScreenActive } from "../src/lib/ui/screen.js";
 
 test("fullscreen menus fit resized terminals and keep the focused action visible", () => {
   const items = Array.from({ length: 60 }, (_, i) => ({
@@ -41,12 +51,12 @@ test("fullscreen menus fit resized terminals and keep the focused action visible
         { tty: true, color, unicode: true, width, motion: false },
         height,
       );
-      assert.equal(frame.length, height);
-      assert.ok(frame.every((line) => visibleWidth(line) <= width));
+      expect(frame.length).toBe(height);
+      expect(frame.every((line) => visibleWidth(line) <= width)).toBeTruthy();
       const text = strip(frame.join("\n"));
-      assert.match(text, /action-42/);
-      assert.match(text, /Concentrate/);
-      assert.match(text, /back/);
+      expect(text).toMatch(/action-42/);
+      expect(text).toMatch(/Concentrate/);
+      expect(text).toMatch(/back/);
     }
   }
 });
@@ -57,133 +67,118 @@ const plain = { tty: true, color: 0, unicode: true, width: 80, motion: false };
 const truecolor = { ...plain, color: 24 };
 
 test("color depth follows the terminal, NO_COLOR, and FORCE_COLOR", () => {
-  assert.equal(caps({}, PIPE).color, 0);
-  assert.equal(
+  expect(caps({}, PIPE).color).toBe(0);
+  expect(
     caps({ COLORTERM: "truecolor", TERM: "xterm-256color" }, TTY).color,
-    24,
-  );
-  assert.equal(caps({ TERM: "xterm-256color" }, TTY).color, 256);
-  assert.equal(
+  ).toBe(24);
+  expect(caps({ TERM: "xterm-256color" }, TTY).color).toBe(256);
+  expect(
     caps(
       { TERM: "xterm-256color", TERM_PROGRAM: "Apple_Terminal", COLORTERM: "" },
       TTY,
     ).color,
-    256,
-  );
-  assert.equal(
+  ).toBe(256);
+  expect(
     caps({ TERM: "xterm", COLORTERM: "truecolor", NO_COLOR: "1" }, TTY).color,
-    0,
-  );
-  assert.equal(caps({ FORCE_COLOR: "3" }, PIPE).color, 24);
-  assert.equal(caps({ TERM: "dumb" }, TTY).color, 0);
+  ).toBe(0);
+  expect(caps({ FORCE_COLOR: "3" }, PIPE).color).toBe(24);
+  expect(caps({ TERM: "dumb" }, TTY).color).toBe(0);
 });
 
 test("motion needs a color TTY and is switched off in CI or by CN_NO_MOTION", () => {
-  assert.equal(caps({ TERM: "xterm-256color" }, TTY).motion, true);
-  assert.equal(caps({ TERM: "xterm-256color", CI: "1" }, TTY).motion, false);
-  assert.equal(
-    caps({ TERM: "xterm-256color", CN_NO_MOTION: "1" }, TTY).motion,
+  expect(caps({ TERM: "xterm-256color" }, TTY).motion).toBe(true);
+  expect(caps({ TERM: "xterm-256color", CI: "1" }, TTY).motion).toBe(false);
+  expect(caps({ TERM: "xterm-256color", CN_NO_MOTION: "1" }, TTY).motion).toBe(
     false,
   );
-  assert.equal(caps({ FORCE_COLOR: "3" }, PIPE).motion, false);
+  expect(caps({ FORCE_COLOR: "3" }, PIPE).motion).toBe(false);
 });
 
 test("unicode is dropped for a dumb terminal or a non-UTF-8 locale", () => {
-  assert.equal(caps({ LANG: "en_US.UTF-8" }, TTY).unicode, true);
-  assert.equal(caps({ LANG: "C" }, TTY).unicode, false);
-  assert.equal(caps({ TERM: "dumb" }, TTY).unicode, false);
-  assert.equal(glyphs({ unicode: false }).on, "*");
+  expect(caps({ LANG: "en_US.UTF-8" }, TTY).unicode).toBe(true);
+  expect(caps({ LANG: "C" }, TTY).unicode).toBe(false);
+  expect(caps({ TERM: "dumb" }, TTY).unicode).toBe(false);
+  expect(glyphs({ unicode: false }).on).toBe("*");
 });
 
 test("paint is plain without color and emits the right escape per depth", () => {
-  assert.equal(paint("focus", "x", {}, plain), "x");
-  assert.match(
-    paint("focus", "x", {}, truecolor),
+  expect(paint("focus", "x", {}, plain)).toBe("x");
+  expect(paint("focus", "x", {}, truecolor)).toMatch(
     /^\x1b\[38;2;255;180;84mx\x1b\[39m$/,
   );
-  assert.match(
-    paint("focus", "x", {}, { ...plain, color: 256 }),
+  expect(paint("focus", "x", {}, { ...plain, color: 256 })).toMatch(
     /^\x1b\[38;5;\d+mx/,
   );
-  assert.match(paint("focus", "x", {}, { ...plain, color: 16 }), /^\x1b\[93mx/);
+  expect(paint("focus", "x", {}, { ...plain, color: 16 })).toMatch(
+    /^\x1b\[93mx/,
+  );
 });
 
 test("the wordmark reads Concentrate AI, and styles never cancel a row's background", async () => {
-  const { surface, SURFACE } = await import("../dist/lib/ui/term.js");
-  assert.equal(strip(wordmark(truecolor)), "Concentrate AI");
-  assert.equal(wordmark(plain), "Concentrate AI");
+  expect(strip(wordmark(truecolor))).toBe("Concentrate AI");
+  expect(wordmark(plain)).toBe("Concentrate AI");
   const row = surface(
     SURFACE.selected,
     `a ${paint("focus", "b", { bold: true }, truecolor)} c`,
     truecolor,
   );
-  assert.ok(!row.includes("\x1b[0m"), "no full reset inside a highlighted row");
-  assert.ok(row.startsWith("\x1b[48;2;") && row.endsWith("\x1b[49m"));
-  assert.equal(
+  expect(
+    !row.includes("\x1b[0m"),
+    "no full reset inside a highlighted row",
+  ).toBeTruthy();
+  expect(row.startsWith("\x1b[48;2;") && row.endsWith("\x1b[49m")).toBeTruthy();
+  expect(
     surface(SURFACE.selected, "x", { ...truecolor, color: 16 }),
-    "x",
     "no tint on 16-color terminals",
-  );
+  ).toBe("x");
 });
 
 test("the header shows the mark when there is room and one line when there is not", async () => {
-  const { header } = await import("../dist/lib/ui/brand.js");
   const wide = header(
     "1.2.3",
     { status: "ready" },
     { ...truecolor, width: 79 },
   );
-  assert.equal(wide.length, 4);
-  assert.match(strip(wide[1]), /Concentrate AI\s+v1\.2\.3$/);
-  for (const line of wide) assert.ok(visibleWidth(line) <= 79);
-  assert.equal(header("1.2.3", {}, { ...truecolor, width: 50 }).length, 1);
-  assert.equal(
+  expect(wide.length).toBe(4);
+  expect(strip(wide[1])).toMatch(/Concentrate AI\s+v1\.2\.3$/);
+  for (const line of wide) expect(visibleWidth(line) <= 79).toBeTruthy();
+  expect(header("1.2.3", {}, { ...truecolor, width: 50 }).length).toBe(1);
+  expect(
     header("1.2.3", {}, { ...plain, width: 79 }).length,
-    1,
     "no block art without color",
-  );
+  ).toBe(1);
 });
 
 test("wrap breaks at spaces and never exceeds the width", async () => {
-  const { wrap } = await import("../dist/lib/ui/widgets.js");
-  assert.deepEqual(wrap("one two three four", 9), ["one two", "three", "four"]);
+  expect(wrap("one two three four", 9)).toStrictEqual([
+    "one two",
+    "three",
+    "four",
+  ]);
   const long = "averyveryverylongword";
   const pieces = wrap(long, 8);
-  assert.ok(pieces.every((piece) => piece.length <= 8));
-  assert.equal(pieces.join(""), long);
-  assert.deepEqual(wrap("", 10), [""]);
+  expect(pieces.every((piece) => piece.length <= 8)).toBeTruthy();
+  expect(pieces.join("")).toBe(long);
+  expect(wrap("", 10)).toStrictEqual([""]);
 });
 
 test("parseKeys decodes arrows, enter, escape, backspace, and pasted text", () => {
-  assert.deepEqual(
-    parseKeys("\x1b[A\x1b[B").map((k) => k.name),
-    ["up", "down"],
-  );
-  assert.deepEqual(
-    parseKeys("\x1bOA").map((k) => k.name),
-    ["up"],
-  );
-  assert.deepEqual(
-    parseKeys("\r").map((k) => k.name),
-    ["enter"],
-  );
-  assert.deepEqual(
-    parseKeys("\x1b").map((k) => k.name),
-    ["escape"],
-  );
-  assert.deepEqual(
-    parseKeys("\x7f").map((k) => k.name),
-    ["backspace"],
-  );
-  assert.deepEqual(
-    parseKeys("\x03").map((k) => k.name),
-    ["interrupt"],
-  );
-  assert.deepEqual(
-    parseKeys("sk-1").map((k) => k.char),
-    ["s", "k", "-", "1"],
-  );
-  assert.deepEqual(parseKeys("\x1b[99~"), []);
+  expect(parseKeys("\x1b[A\x1b[B").map((k) => k.name)).toStrictEqual([
+    "up",
+    "down",
+  ]);
+  expect(parseKeys("\x1bOA").map((k) => k.name)).toStrictEqual(["up"]);
+  expect(parseKeys("\r").map((k) => k.name)).toStrictEqual(["enter"]);
+  expect(parseKeys("\x1b").map((k) => k.name)).toStrictEqual(["escape"]);
+  expect(parseKeys("\x7f").map((k) => k.name)).toStrictEqual(["backspace"]);
+  expect(parseKeys("\x03").map((k) => k.name)).toStrictEqual(["interrupt"]);
+  expect(parseKeys("sk-1").map((k) => k.char)).toStrictEqual([
+    "s",
+    "k",
+    "-",
+    "1",
+  ]);
+  expect(parseKeys("\x1b[99~")).toStrictEqual([]);
 });
 
 const ITEMS = [
@@ -202,42 +197,41 @@ const focused = (state) => visible(state)[state.cursor].value;
 
 test("the cursor skips group headers and wraps around", () => {
   let state = createSelect(ITEMS);
-  assert.equal(focused(state), "a");
+  expect(focused(state)).toBe("a");
   state = press(state, "down", "down");
-  assert.equal(focused(state), "c");
+  expect(focused(state)).toBe("c");
   state = press(state, "down");
-  assert.equal(focused(state), "a");
-  assert.equal(focused(press(state, "up")), "c");
-  assert.equal(focused(createSelect(ITEMS, { initial: "c" })), "c");
+  expect(focused(state)).toBe("a");
+  expect(focused(press(state, "up"))).toBe("c");
+  expect(focused(createSelect(ITEMS, { initial: "c" }))).toBe("c");
 });
 
 test("enter selects, escape and q cancel, ctrl-c is an interrupt", () => {
   const state = createSelect(ITEMS);
-  assert.deepEqual(press(state, "down", "enter").done, { value: "b" });
-  assert.deepEqual(press(state, "escape").done, { cancel: true });
-  assert.deepEqual(press(state, { name: "char", char: "q" }).done, {
+  expect(press(state, "down", "enter").done).toStrictEqual({ value: "b" });
+  expect(press(state, "escape").done).toStrictEqual({ cancel: true });
+  expect(press(state, { name: "char", char: "q" }).done).toStrictEqual({
     cancel: true,
   });
-  assert.equal(press(state, "interrupt").done.interrupted, true);
+  expect(press(state, "interrupt").done.interrupted).toBe(true);
 });
 
 test("filtering narrows the list, escape clears it first, and custom IDs are offered", () => {
   let state = createSelect(ITEMS, { filterable: true, allowCustom: true });
   for (const char of "gam") state = press(state, { name: "char", char });
-  assert.equal(visible(state).length, 2);
-  assert.equal(focused(state), "c");
-  assert.equal(visible(state).at(-1).value, "gam");
+  expect(visible(state).length).toBe(2);
+  expect(focused(state)).toBe("c");
+  expect(visible(state).at(-1).value).toBe("gam");
   state = press(state, "escape");
-  assert.equal(state.query, "");
-  assert.equal(state.done, undefined);
-  assert.deepEqual(press(state, "escape").done, { cancel: true });
+  expect(state.query).toBe("");
+  expect(state.done).toBe(undefined);
+  expect(press(state, "escape").done).toStrictEqual({ cancel: true });
   const typed = press(
     createSelect(ITEMS, { filterable: true, allowCustom: true }),
     ...[..."zzz"].map((char) => ({ name: "char", char })),
   );
-  assert.deepEqual(press(typed, "enter").done, { value: "zzz" });
-  assert.equal(
-    focused(press(typed, "backspace", "backspace", "backspace")),
+  expect(press(typed, "enter").done).toStrictEqual({ value: "zzz" });
+  expect(focused(press(typed, "backspace", "backspace", "backspace"))).toBe(
     "a",
   );
 });
@@ -253,37 +247,36 @@ test("a rendered frame never exceeds the content width and shows window indicato
   state = press(state, ...Array(20).fill("down"));
   const lines = renderSelect(state, { title: "Pick" }, plain);
   for (const line of lines)
-    assert.ok(
+    expect(
       visibleWidth(line) <= 72,
       `too wide (${visibleWidth(line)}): ${line}`,
-    );
+    ).toBeTruthy();
   const text = lines.join("\n");
-  assert.match(text, /↑ \d+ more/);
-  assert.match(text, /↓ \d+ more/);
-  assert.match(text, /21\/40|40\/40/);
+  expect(text).toMatch(/↑ \d+ more/);
+  expect(text).toMatch(/↓ \d+ more/);
+  expect(text).toMatch(/21\/40|40\/40/);
 });
 
 test("context bars keep a fixed width and grow with the window", () => {
   const widths = [0, 4000, 8000, 128000, 1_000_000, 5_000_000].map((n) =>
     visibleWidth(contextBar(n, plain)),
   );
-  assert.ok(
+  expect(
     widths.every((w) => w === 8),
     widths.join(),
-  );
+  ).toBeTruthy();
   const filled = (n) =>
     [...strip(contextBar(n, plain))].filter((ch) => ch !== "·").length;
-  assert.ok(filled(8000) <= filled(128000));
-  assert.ok(filled(128000) <= filled(1_000_000));
-  assert.ok(filled(2_000_000) >= filled(1_000_000));
-  assert.equal(
-    visibleWidth(contextBar(200000, { ...plain, unicode: false })),
+  expect(filled(8000) <= filled(128000)).toBeTruthy();
+  expect(filled(128000) <= filled(1_000_000)).toBeTruthy();
+  expect(filled(2_000_000) >= filled(1_000_000)).toBeTruthy();
+  expect(visibleWidth(contextBar(200000, { ...plain, unicode: false }))).toBe(
     8,
   );
-  assert.equal(formatTokens(200000), "200k");
-  assert.equal(formatTokens(1_000_000), "1M");
-  assert.equal(formatTokens(1_500_000), "1.5M");
-  assert.equal(formatTokens(null), "");
+  expect(formatTokens(200000)).toBe("200k");
+  expect(formatTokens(1_000_000)).toBe("1M");
+  expect(formatTokens(1_500_000)).toBe("1.5M");
+  expect(formatTokens(null)).toBe("");
 });
 
 test("panels have uniform width and ledger rows align", () => {
@@ -292,34 +285,32 @@ test("panels have uniform width and ledger rows align", () => {
     ["› cn claude", "", "a much longer line of text"],
     plain,
   );
-  assert.equal(new Set(box.map(visibleWidth)).size, 1);
-  assert.match(box[0], /╭─ ready ─+╮/);
-  assert.equal(
-    visibleWidth(ledger("ok", "key", "x", plain)),
+  expect(new Set(box.map(visibleWidth)).size).toBe(1);
+  expect(box[0]).toMatch(/╭─ ready ─+╮/);
+  expect(visibleWidth(ledger("ok", "key", "x", plain))).toBe(
     visibleWidth(ledger("bad", "Codex CLI", "x", plain)),
   );
-  assert.equal(fit("abcdefghij", 5), "abcd…");
-  assert.equal(fit("abc", 5), "abc");
+  expect(fit("abcdefghij", 5)).toBe("abcd…");
+  expect(fit("abc", 5)).toBe("abc");
 });
 
 test("clip cuts to visible columns, keeps colors closed, and leaves plain text plain", async () => {
-  const { clip } = await import("../dist/lib/ui/term.js");
-  assert.equal(clip("abcdef", 4), "abcd");
-  assert.equal(clip("abc", 4), "abc");
+  expect(clip("abcdef", 4)).toBe("abcd");
+  expect(clip("abc", 4)).toBe("abc");
   const colored = paint("focus", "abcdef", {}, truecolor);
   const cut = clip(colored, 3);
-  assert.equal(strip(cut), "abc");
-  assert.ok(cut.endsWith("\x1b[0m"), "an open color is closed");
-  assert.ok(
+  expect(strip(cut)).toBe("abc");
+  expect(cut.endsWith("\x1b[0m"), "an open color is closed").toBeTruthy();
+  expect(
     !clip("abcdef", 3).includes("\x1b"),
     "no escape codes added to plain text",
-  );
+  ).toBeTruthy();
 });
 
 test("the layout width stays one column inside the terminal", () => {
-  assert.equal(caps({}, { isTTY: true, columns: 40 }).width, 39);
-  assert.equal(caps({}, { isTTY: true, columns: 300 }).width, 100);
-  assert.equal(caps({}, { isTTY: true, columns: 10 }).width, 20);
+  expect(caps({}, { isTTY: true, columns: 40 }).width).toBe(39);
+  expect(caps({}, { isTTY: true, columns: 300 }).width).toBe(100);
+  expect(caps({}, { isTTY: true, columns: 10 }).width).toBe(20);
   const narrow = { ...plain, width: 39 };
   const state = createSelect([
     {
@@ -330,26 +321,24 @@ test("the layout width stays one column inside the terminal", () => {
     },
   ]);
   for (const line of renderSelect(state, {}, narrow))
-    assert.ok(visibleWidth(line) <= 39, line);
-  assert.match(renderSelect(state, {}, narrow).join("\n"), /ready/);
+    expect(visibleWidth(line) <= 39, line).toBeTruthy();
+  expect(renderSelect(state, {}, narrow).join("\n")).toMatch(/ready/);
 });
 
 test("a screen stops reacting to signals while a child tool owns the terminal", async () => {
-  const { openScreen, fullScreenActive } =
-    await import("../dist/lib/ui/screen.js");
   const out = { write() {} };
   const count = () => process.listenerCount("SIGINT");
   const before = count();
   const screen = openScreen(out);
-  assert.equal(count(), before + 1);
+  expect(count()).toBe(before + 1);
   screen.suspend();
-  assert.equal(count(), before, "Ctrl+C meant for the tool reached the menu");
+  expect(count(), "Ctrl+C meant for the tool reached the menu").toBe(before);
   screen.resume();
-  assert.equal(count(), before + 1);
-  assert.equal(fullScreenActive(), true);
+  expect(count()).toBe(before + 1);
+  expect(fullScreenActive()).toBe(true);
   screen.close();
-  assert.equal(count(), before);
-  assert.equal(fullScreenActive(), false);
+  expect(count()).toBe(before);
+  expect(fullScreenActive()).toBe(false);
 });
 
 test("the key screen is centered, fits any terminal, and never shows the key", () => {
@@ -380,20 +369,23 @@ test("the key screen is centered, fits any terminal, and never shows the key", (
         rows,
         plain,
       );
-      assert.ok(lines.length <= rows, `${columns}x${rows} ${status}: too tall`);
-      assert.ok(
+      expect(
+        lines.length <= rows,
+        `${columns}x${rows} ${status}: too tall`,
+      ).toBeTruthy();
+      expect(
         top + lines.length <= rows,
         `${columns}x${rows}: runs off the bottom`,
-      );
+      ).toBeTruthy();
       for (const line of lines)
-        assert.ok(
+        expect(
           left + visibleWidth(line) <= columns,
           `${columns}x${rows} ${status}: a line is wider than the terminal`,
-        );
-      assert.ok(
+        ).toBeTruthy();
+      expect(
         !lines.join("\n").includes("secret"),
         "the key must only be drawn as dots",
-      );
+      ).toBeTruthy();
     }
   }
   const wide = renderKeyEntry(
@@ -403,9 +395,9 @@ test("the key screen is centered, fits any terminal, and never shows the key", (
     plain,
   );
   const text = wide.lines.join("\n");
-  assert.match(text, /Connect your API key/);
-  assert.match(text, /Paste your key here/);
-  assert.match(text, /concentrate\.ai\/settings\/api-keys/);
-  assert.ok(wide.left > 10, "the card is centered horizontally");
-  assert.ok(wide.top > 3, "the card is centered vertically");
+  expect(text).toMatch(/Connect your API key/);
+  expect(text).toMatch(/Paste your key here/);
+  expect(text).toMatch(/concentrate\.ai\/settings\/api-keys/);
+  expect(wide.left > 10, "the card is centered horizontally").toBeTruthy();
+  expect(wide.top > 3, "the card is centered vertically").toBeTruthy();
 });

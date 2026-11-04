@@ -1,11 +1,10 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { test } from "node:test";
-import { tempDir } from "./helpers.mjs";
+import { test, expect } from "vitest";
+import { tempDir } from "./helpers.js";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const installer = fs.readFileSync(path.join(root, "install.sh"), "utf8");
 function fixture() {
@@ -81,40 +80,37 @@ function fixture() {
 test("piped web install verifies a built release, needs no pnpm, preserves credentials and supports pinned releases", () => {
   const f = fixture();
   const result = f.run({ CN_INSTALL_VERSION: "0.1.0" });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const version = spawnSync(f.launcher, ["--version"], {
     env: f.env,
     encoding: "utf8",
   });
   // The test serves a package built from this checkout, whatever its version.
-  assert.equal(
-    version.stdout.trim(),
+  expect(version.stdout.trim()).toBe(
     JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
       .version,
   );
-  assert.match(
-    fs.readFileSync(f.env.CN_TEST_URLS, "utf8"),
+  expect(fs.readFileSync(f.env.CN_TEST_URLS, "utf8")).toMatch(
     /https:\/\/github\.com\/concentrateai-hq\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,
   );
-  assert.equal(fs.existsSync(path.join(f.runtime, "node_modules")), false);
+  expect(fs.existsSync(path.join(f.runtime, "node_modules"))).toBe(false);
   // The changelog ships with the install, for `cn changelog` and `cn update`.
   const notes = spawnSync(f.launcher, ["changelog"], {
     env: f.env,
     encoding: "utf8",
   });
-  assert.equal(notes.status, 0, notes.stderr);
-  assert.match(notes.stdout, /^\d+\.\d+\.\d+/);
-  assert.equal(
+  expect(notes.status, notes.stderr).toBe(0);
+  expect(notes.stdout).toMatch(/^\d+\.\d+\.\d+/);
+  expect(
     fs.readFileSync(
       path.join(f.env.CN_CONFIG_HOME, "credentials.json"),
       "utf8",
     ),
-    "private-test-data",
-  );
+  ).toBe("private-test-data");
 });
 test("a failed checksum preserves the existing installation", () => {
   const f = fixture();
-  assert.equal(f.run().status, 0);
+  expect(f.run().status).toBe(0);
   const original = fs.readFileSync(f.launcher, "utf8");
   fs.writeFileSync(path.join(f.runtime, "keep"), "old-runtime");
   fs.writeFileSync(
@@ -122,11 +118,10 @@ test("a failed checksum preserves the existing installation", () => {
     `${"0".repeat(64)}  concentrate-cli.tar.gz\n`,
   );
   const result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /SHA-256 verification/);
-  assert.equal(fs.readFileSync(f.launcher, "utf8"), original);
-  assert.equal(
-    fs.readFileSync(path.join(f.runtime, "keep"), "utf8"),
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/SHA-256 verification/);
+  expect(fs.readFileSync(f.launcher, "utf8")).toBe(original);
+  expect(fs.readFileSync(path.join(f.runtime, "keep"), "utf8")).toBe(
     "old-runtime",
   );
 });
@@ -138,17 +133,16 @@ test("Node older than 22.13 is refused before anything is downloaded or installe
     'Object.defineProperty(process.versions, "node", { value: "22.12.0" });\n',
   );
   const result = f.run({ NODE_OPTIONS: `--require=${preload}` });
-  assert.notEqual(result.status, 0);
-  assert.match(
-    result.stderr,
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(
     /Node\.js 22\.13\+ is required \(found 22\.12\.0\)/,
   );
-  assert.equal(fs.existsSync(f.env.CN_TEST_URLS), false);
-  assert.equal(fs.existsSync(f.launcher), false);
+  expect(fs.existsSync(f.env.CN_TEST_URLS)).toBe(false);
+  expect(fs.existsSync(f.launcher)).toBe(false);
 });
 test("an upgrade rolls back its runtime if launcher replacement fails", () => {
   const f = fixture();
-  assert.equal(f.run().status, 0);
+  expect(f.run().status).toBe(0);
   const original = fs.readFileSync(f.launcher, "utf8");
   fs.writeFileSync(path.join(f.runtime, "keep"), "old-runtime");
   fs.writeFileSync(
@@ -157,25 +151,24 @@ test("an upgrade rolls back its runtime if launcher replacement fails", () => {
     { mode: 0o755 },
   );
   const result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.equal(fs.readFileSync(f.launcher, "utf8"), original);
-  assert.equal(
-    fs.readFileSync(path.join(f.runtime, "keep"), "utf8"),
+  expect(result.status).not.toBe(0);
+  expect(fs.readFileSync(f.launcher, "utf8")).toBe(original);
+  expect(fs.readFileSync(path.join(f.runtime, "keep"), "utf8")).toBe(
     "old-runtime",
   );
-  assert.deepEqual(fs.readdirSync(path.dirname(f.runtime)), [
+  expect(fs.readdirSync(path.dirname(f.runtime))).toStrictEqual([
     "concentrate-cli",
   ]);
 });
 test("web installer refuses an unrelated cn and invalid release selectors", () => {
   const f = fixture();
-  assert.notEqual(f.run({ CN_INSTALL_VERSION: "../../other" }).status, 0);
+  expect(f.run({ CN_INSTALL_VERSION: "../../other" }).status).not.toBe(0);
   fs.mkdirSync(path.dirname(f.launcher), { recursive: true });
   fs.writeFileSync(f.launcher, "#!/bin/sh\necho unrelated\n", { mode: 0o755 });
   const result = f.run();
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /different cn command/);
-  assert.match(fs.readFileSync(f.launcher, "utf8"), /unrelated/);
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/different cn command/);
+  expect(fs.readFileSync(f.launcher, "utf8")).toMatch(/unrelated/);
 });
 test("a checksum file from the previous release is retried instead of failing the install", () => {
   const f = fixture();
@@ -184,14 +177,14 @@ test("a checksum file from the previous release is retried instead of failing th
     `${"0".repeat(64)}  concentrate-cli.tar.gz\n`,
   );
   const result = f.run();
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const urls = fs.readFileSync(f.env.CN_TEST_URLS, "utf8").trim().split("\n");
-  assert.equal(urls.filter((url) => url.endsWith("SHA256SUMS")).length, 2);
+  expect(urls.filter((url) => url.endsWith("SHA256SUMS")).length).toBe(2);
 });
 test("bash users on macOS or with a .bash_profile are told to edit .bash_profile", () => {
   const f = fixture();
   fs.writeFileSync(path.join(f.home, ".bash_profile"), "");
   const result = f.run({ SHELL: "/bin/bash" });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Add this line to .*\.bash_profile/);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toMatch(/Add this line to .*\.bash_profile/);
 });

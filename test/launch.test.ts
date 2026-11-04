@@ -1,14 +1,16 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { test } from "node:test";
+import { test, expect } from "vitest";
 
 import {
   parseFlags,
   parseLaunchArgs,
   parseHarnessLaunchArgs,
-} from "../dist/lib/cli.js";
-import { fakeTool, runCn, tempDir } from "./helpers.mjs";
+} from "../src/lib/cli.js";
+import { fakeTool, runCn, tempDir } from "./helpers.js";
+import { modelsFor } from "../src/lib/catalog.js";
+import { which } from "../src/lib/launch.js";
+import { writeCodexCatalog } from "../src/lib/pickers.js";
 
 function setup(extraEnv = {}) {
   const bin = tempDir("cn-bin-");
@@ -29,46 +31,46 @@ function setup(extraEnv = {}) {
 }
 
 test("Claude session aliases preserve IDs, native flags, model overrides, and literal prompts", () => {
-  assert.deepEqual(
+  expect(
     parseHarnessLaunchArgs("claude", ["resume", "saved-session"]),
-    { model: undefined, forwarded: ["--resume", "saved-session"] },
-  );
-  assert.deepEqual(parseHarnessLaunchArgs("claude", ["continue"]).forwarded, [
-    "--continue",
-  ]);
-  assert.deepEqual(parseHarnessLaunchArgs("claude", ["resume"]).forwarded, [
+  ).toStrictEqual({
+    model: undefined,
+    forwarded: ["--resume", "saved-session"],
+  });
+  expect(
+    parseHarnessLaunchArgs("claude", ["continue"]).forwarded,
+  ).toStrictEqual(["--continue"]);
+  expect(parseHarnessLaunchArgs("claude", ["resume"]).forwarded).toStrictEqual([
     "--resume",
   ]);
-  assert.deepEqual(
+  expect(
     parseHarnessLaunchArgs("claude", [
       "--model",
       "claude-sonnet-5",
       "resume",
       "saved-session",
     ]),
-    { model: "claude-sonnet-5", forwarded: ["--resume", "saved-session"] },
-  );
-  assert.deepEqual(
+  ).toStrictEqual({
+    model: "claude-sonnet-5",
+    forwarded: ["--resume", "saved-session"],
+  });
+  expect(
     parseHarnessLaunchArgs("claude", ["--", "resume"]).forwarded,
-    ["resume"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["resume"]);
+  expect(
     parseHarnessLaunchArgs("claude", [
       "resume",
       "saved-session",
       "--",
       "continue",
     ]).forwarded,
-    ["--resume", "saved-session", "--", "continue"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["--resume", "saved-session", "--", "continue"]);
+  expect(
     parseHarnessLaunchArgs("claude", ["--resume", "saved-session"]).forwarded,
-    ["--resume", "saved-session"],
-  );
-  assert.deepEqual(
+  ).toStrictEqual(["--resume", "saved-session"]);
+  expect(
     parseHarnessLaunchArgs("codex", ["resume", "saved-session"]).forwarded,
-    ["resume", "saved-session"],
-  );
+  ).toStrictEqual(["resume", "saved-session"]);
 });
 
 test("Claude resume uses Concentrate without assigning a new session or changing saved login", () => {
@@ -87,18 +89,17 @@ test("Claude resume uses Concentrate without assigning a new session or changing
     const { bin, env } = setup({ CLAUDE_CONFIG_DIR: directory });
     const record = fakeTool(bin, "claude");
     const result = runCn(["claude", ...args], { env });
-    assert.equal(result.status, 0, result.stderr);
+    expect(result.status, result.stderr).toBe(0);
     const seen = record();
-    assert.equal(seen.args.includes("--session-id"), false);
-    assert.deepEqual(
-      seen.args.slice(-args.length),
+    expect(seen.args.includes("--session-id")).toBe(false);
+    expect(seen.args.slice(-args.length)).toStrictEqual(
       args[0] === "resume" || args[0] === "continue"
         ? [`--${args[0]}`, ...args.slice(1)]
         : args,
     );
-    assert.equal(seen.env.ANTHROPIC_BASE_URL, "https://api.concentrate.ai");
-    assert.equal(seen.env.CN_CLAUDE_KEY, "sk-test");
-    assert.equal(fs.readFileSync(login, "utf8"), original);
+    expect(seen.env.ANTHROPIC_BASE_URL).toBe("https://api.concentrate.ai");
+    expect(seen.env.CN_CLAUDE_KEY).toBe("sk-test");
+    expect(fs.readFileSync(login, "utf8")).toBe(original);
   }
 });
 
@@ -107,19 +108,19 @@ test("a missing tool fails fast with exit 127, an install hint, and no key or ne
   // Node's own directory can also contain globally installed coding agents.
   env.PATH = bin;
   const result = runCn(["codex"], { env });
-  assert.equal(result.status, 127);
-  assert.match(result.stderr, /Codex CLI isn't installed/);
-  assert.match(result.stderr, /npm install -g @openai\/codex/);
-  assert.doesNotMatch(result.stderr, /Usage:/);
-  assert.doesNotMatch(result.stderr, /API key/);
+  expect(result.status).toBe(127);
+  expect(result.stderr).toMatch(/Codex CLI isn't installed/);
+  expect(result.stderr).toMatch(/npm install -g @openai\/codex/);
+  expect(result.stderr).not.toMatch(/Usage:/);
+  expect(result.stderr).not.toMatch(/API key/);
 });
 
 test("an installed tool with no key tells the user to run setup", () => {
   const { bin, env } = setup({ CONCENTRATE_API_KEY: "" });
   fakeTool(bin, "claude");
   const result = runCn(["claude"], { env });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /Run cn setup first/);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toMatch(/Run cn setup first/);
 });
 
 test("claude gets Concentrate in its child environment and forwards args after --", () => {
@@ -129,37 +130,35 @@ test("claude gets Concentrate in its child environment and forwards args after -
     ["claude", "--model", "claude-opus-4-6", "--", "-p", "hello"],
     { env },
   );
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.equal(seen.env.ANTHROPIC_BASE_URL, "https://api.concentrate.ai");
-  assert.equal(seen.env.CN_CLAUDE_KEY, "sk-test");
-  assert.equal(
+  expect(seen.env.ANTHROPIC_BASE_URL).toBe("https://api.concentrate.ai");
+  expect(seen.env.CN_CLAUDE_KEY).toBe("sk-test");
+  expect(
     seen.env.ANTHROPIC_API_KEY,
-    undefined,
     "the key reaches Claude only through cn's helper",
-  );
-  assert.equal(seen.env.ANTHROPIC_MODEL, "claude-opus-4-6");
-  assert.deepEqual(seen.args.slice(0, 1), ["--settings"]);
-  assert.equal(seen.args[seen.args.indexOf("--model") + 1], "claude-opus-4-6");
-  assert.deepEqual(seen.args.slice(-2), ["-p", "hello"]);
+  ).toBe(undefined);
+  expect(seen.env.ANTHROPIC_MODEL).toBe("claude-opus-4-6");
+  expect(seen.args.slice(0, 1)).toStrictEqual(["--settings"]);
+  expect(seen.args[seen.args.indexOf("--model") + 1]).toBe("claude-opus-4-6");
+  expect(seen.args.slice(-2)).toStrictEqual(["-p", "hello"]);
   const settings = JSON.parse(seen.args[1]);
-  assert.equal(settings.env.ANTHROPIC_MODEL, "claude-opus-4-6");
-  assert.equal(settings.apiKeyHelper, "printenv CN_CLAUDE_KEY");
+  expect(settings.env.ANTHROPIC_MODEL).toBe("claude-opus-4-6");
+  expect(settings.apiKeyHelper).toBe("printenv CN_CLAUDE_KEY");
   for (const name of [
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
     "CLAUDE_CODE_USE_BEDROCK",
   ]) {
-    assert.equal(
+    expect(
       settings.env[name],
-      "",
       `${name} is blanked over the user's own settings files`,
-    );
+    ).toBe("");
   }
-  assert.ok(
+  expect(
     !seen.args.join(" ").includes("sk-test"),
     "key must never appear in argv",
-  );
+  ).toBeTruthy();
 });
 
 test("claude launches non-Claude models with the same classifier, including provider-pinned models", () => {
@@ -173,12 +172,11 @@ test("claude launches non-Claude models with the same classifier, including prov
     const { bin, env } = setup();
     const record = fakeTool(bin, "claude");
     const result = runCn(["claude", "--model", model], { env });
-    assert.equal(result.status, 0, result.stderr);
+    expect(result.status, result.stderr).toBe(0);
     const seen = record();
-    assert.equal(seen.env.ANTHROPIC_MODEL, model);
-    assert.equal(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL, model);
-    assert.equal(
-      JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL,
+    expect(seen.env.ANTHROPIC_MODEL).toBe(model);
+    expect(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(model);
+    expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(
       model,
     );
   }
@@ -190,11 +188,10 @@ test("claude preserves an explicit classifier choice when launching a non-Claude
   });
   const record = fakeTool(bin, "claude");
   const result = runCn(["claude", "--model", "glm-5.3"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.equal(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL, "claude-sonnet-5");
-  assert.equal(
-    JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL,
+  expect(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe("claude-sonnet-5");
+  expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(
     "claude-sonnet-5",
   );
 });
@@ -203,11 +200,10 @@ test("claude leaves classifier selection alone for Claude models", () => {
   const { bin, env } = setup();
   const record = fakeTool(bin, "claude");
   const result = runCn(["claude", "--model", "claude-sonnet-5"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.equal(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL, undefined);
-  assert.equal(
-    JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL,
+  expect(seen.env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(undefined);
+  expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(
     undefined,
   );
 });
@@ -226,14 +222,13 @@ test("claude receives catalog context limits for custom and provider-pinned mode
       { mode: 0o600 },
     );
     const result = runCn(["claude", "--model", model], { env });
-    assert.equal(result.status, 0, result.stderr);
+    expect(result.status, result.stderr).toBe(0);
     const seen = record();
-    assert.equal(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "202752");
-    assert.equal(
+    expect(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe("202752");
+    expect(
       JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS,
-      undefined,
       "automatic limit must not be pinned in settings across switches",
-    );
+    ).toBe(undefined);
   }
 });
 
@@ -252,11 +247,10 @@ test("claude respects a user's explicit context limit instead of the catalog", (
     { mode: 0o600 },
   );
   const result = runCn(["claude", "--model", "glm-5.3"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.equal(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, "100000");
-  assert.equal(
-    JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS,
+  expect(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe("100000");
+  expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(
     "100000",
   );
 });
@@ -282,11 +276,10 @@ test("claude gets no invented context limit for missing metadata or native Claud
       { mode: 0o600 },
     );
     const result = runCn(["claude", "--model", model], { env });
-    assert.equal(result.status, 0, result.stderr);
+    expect(result.status, result.stderr).toBe(0);
     const seen = record();
-    assert.equal(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, undefined);
-    assert.equal(
-      JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS,
+    expect(seen.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(undefined);
+    expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(
       undefined,
     );
   }
@@ -313,37 +306,34 @@ test("claude's picker includes every compatible model beyond the former shortlis
     { mode: 0o600 },
   );
   const result = runCn(["claude", "--model", "coding-model-132"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const { modelPicker } = JSON.parse(record().args[1]);
-  assert.equal(modelPicker.options.length, 133);
-  assert.equal(modelPicker.options[0].model, "coding-model-132");
-  assert.deepEqual(
+  expect(modelPicker.options.length).toBe(133);
+  expect(modelPicker.options[0].model).toBe("coding-model-132");
+  expect(
     modelPicker.options.map((option) => option.model).sort(),
-    models.map((model) => model.id).sort(),
-  );
+  ).toStrictEqual(models.map((model) => model.id).sort());
 });
 
 test("codex gets per-run provider overrides and the key only in env", () => {
   const { bin, env } = setup();
   const record = fakeTool(bin, "codex");
   const result = runCn(["codex", "--", "exec", "hi"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.equal(seen.env.CONCENTRATE_API_KEY, "sk-test");
+  expect(seen.env.CONCENTRATE_API_KEY).toBe("sk-test");
   const joined = seen.args.join("\n");
-  assert.match(joined, /model_provider="concentrate"/);
-  assert.match(joined, /model_catalog_json=/);
-  assert.match(
-    joined,
+  expect(joined).toMatch(/model_provider="concentrate"/);
+  expect(joined).toMatch(/model_catalog_json=/);
+  expect(joined).toMatch(
     /model_providers\.concentrate\.base_url="https:\/\/api\.concentrate\.ai\/v1"/,
   );
-  assert.match(
-    joined,
+  expect(joined).toMatch(
     /model_providers\.concentrate\.env_key="CONCENTRATE_API_KEY"/,
   );
-  assert.ok(!joined.includes("sk-test"));
-  assert.equal(seen.args[seen.args.indexOf("-m") + 1], "gpt-6.1-terra");
-  assert.deepEqual(seen.args.slice(-2), ["exec", "hi"]);
+  expect(!joined.includes("sk-test")).toBeTruthy();
+  expect(seen.args[seen.args.indexOf("-m") + 1]).toBe("gpt-6.1-terra");
+  expect(seen.args.slice(-2)).toStrictEqual(["exec", "hi"]);
 });
 
 test("codex omits env_key when the saved provider already has a credential helper", () => {
@@ -354,23 +344,22 @@ test("codex omits env_key when the saved provider already has a credential helpe
     path.join(codexHome, "config.toml"),
     '[model_providers.concentrate.auth]\ncommand = "/tmp/helper"\n',
   );
-  assert.equal(runCn(["codex", "--", "exec", "hi"], { env }).status, 0);
-  assert.ok(!record().args.join("\n").includes("env_key"));
+  expect(runCn(["codex", "--", "exec", "hi"], { env }).status).toBe(0);
+  expect(!record().args.join("\n").includes("env_key")).toBeTruthy();
   fs.writeFileSync(path.join(codexHome, "config.toml"), 'model = "x"\n');
-  assert.equal(runCn(["codex", "--", "exec", "hi"], { env }).status, 0);
-  assert.match(record().args.join("\n"), /env_key="CONCENTRATE_API_KEY"/);
+  expect(runCn(["codex", "--", "exec", "hi"], { env }).status).toBe(0);
+  expect(record().args.join("\n")).toMatch(/env_key="CONCENTRATE_API_KEY"/);
 });
 
 test("codex runs without the shared background server", () => {
   const { bin, env } = setup();
   const record = fakeTool(bin, "codex");
   const result = runCn(["codex", "--", "exec", "hi"], { env });
-  assert.equal(result.status, 0, result.stderr);
-  assert.ok(record().args.includes("--no-daemon"));
+  expect(result.status, result.stderr).toBe(0);
+  expect(record().args.includes("--no-daemon")).toBeTruthy();
 });
 
 test("codex is limited to OpenAI models", async () => {
-  const { modelsFor } = await import("../dist/lib/catalog.js");
   const models = [
     "gpt-5.5",
     "o3",
@@ -378,10 +367,10 @@ test("codex is limited to OpenAI models", async () => {
     "grok-4.7",
     "gemini-3.8-flash",
   ].map((id) => ({ id, codex: true, chat_candidate: true }));
-  assert.deepEqual(
-    modelsFor("codex", models).map((m) => m.id),
-    ["gpt-5.5", "o3"],
-  );
+  expect(modelsFor("codex", models).map((m) => m.id)).toStrictEqual([
+    "gpt-5.5",
+    "o3",
+  ]);
 });
 
 test("a saved non-OpenAI Codex default falls back, and --model refuses one", () => {
@@ -393,12 +382,12 @@ test("a saved non-OpenAI Codex default falls back, and --model refuses one", () 
     { mode: 0o600 },
   );
   const result = runCn(["codex", "--", "exec", "hi"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const { args } = record();
-  assert.equal(args[args.indexOf("-m") + 1], "gpt-6.1-terra");
+  expect(args[args.indexOf("-m") + 1]).toBe("gpt-6.1-terra");
   const refused = runCn(["codex", "--model", "grok-4.7"], { env });
-  assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /limited to OpenAI models/);
+  expect(refused.status).not.toBe(0);
+  expect(refused.stderr).toMatch(/limited to OpenAI models/);
 });
 
 test("codex resumes directly with the original session ID and Concentrate settings", () => {
@@ -406,45 +395,44 @@ test("codex resumes directly with the original session ID and Concentrate settin
   const record = fakeTool(bin, "codex");
   const session = "01a1830a-36f8-76c0-acb6-e82b2183af2b";
   const result = runCn(["codex", "resume", session], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.deepEqual(seen.args.slice(-2), ["resume", session]);
-  assert.equal(seen.args.includes("--remote"), false);
-  assert.match(seen.args.join("\n"), /model_provider="concentrate"/);
-  assert.equal(seen.env.CONCENTRATE_API_KEY, "sk-test");
+  expect(seen.args.slice(-2)).toStrictEqual(["resume", session]);
+  expect(seen.args.includes("--remote")).toBe(false);
+  expect(seen.args.join("\n")).toMatch(/model_provider="concentrate"/);
+  expect(seen.env.CONCENTRATE_API_KEY).toBe("sk-test");
 });
 
 test("pi runs against a temporary agent dir that is removed afterwards", () => {
   const { bin, env } = setup();
   const record = fakeTool(bin, "pi");
   const result = runCn(["pi", "--", "-p", "hi"], { env });
-  assert.equal(result.status, 0, result.stderr);
+  expect(result.status, result.stderr).toBe(0);
   const seen = record();
-  assert.deepEqual(seen.args.slice(0, 4), [
+  expect(seen.args.slice(0, 4)).toStrictEqual([
     "--provider",
     "concentrate",
     "--model",
     "deepseek-v4-1-flash",
   ]);
-  assert.equal(seen.args.includes("--session-dir"), false);
-  assert.equal(seen.args.includes("--session-id"), false);
-  assert.match(seen.env.PI_CODING_AGENT_DIR, /cn-pi-/);
-  assert.equal(
+  expect(seen.args.includes("--session-dir")).toBe(false);
+  expect(seen.args.includes("--session-id")).toBe(false);
+  expect(seen.env.PI_CODING_AGENT_DIR).toMatch(/cn-pi-/);
+  expect(
     fs.existsSync(seen.env.PI_CODING_AGENT_DIR),
-    false,
     "temp dir should be cleaned up",
-  );
-  assert.deepEqual(seen.args.slice(-2), ["-p", "hi"]);
+  ).toBe(false);
+  expect(seen.args.slice(-2)).toStrictEqual(["-p", "hi"]);
 });
 
 test("pi refuses versions before 0.77 and asks for an update", () => {
   const { bin, env } = setup();
   fakeTool(bin, "pi", { version: "0.76.2", versionOnStderr: true });
   const result = runCn(["pi", "--", "-p", "hi"], { env });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Pi 0\.77 or newer/);
-  assert.match(result.stderr, /pi update self/);
-  assert.equal(fs.existsSync(path.join(bin, "pi.record.json")), false);
+  expect(result.status).not.toBe(0);
+  expect(result.stderr).toMatch(/Pi 0\.77 or newer/);
+  expect(result.stderr).toMatch(/pi update self/);
+  expect(fs.existsSync(path.join(bin, "pi.record.json"))).toBe(false);
 });
 
 test("pi launches on 0.77 and later", () => {
@@ -452,8 +440,8 @@ test("pi launches on 0.77 and later", () => {
     const { bin, env } = setup();
     const record = fakeTool(bin, "pi", { version });
     const result = runCn(["pi", "--", "-p", "hi"], { env });
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(record().args.slice(-2), ["-p", "hi"]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(record().args.slice(-2)).toStrictEqual(["-p", "hi"]);
   }
 });
 
@@ -476,47 +464,49 @@ console.log(JSON.stringify({ settings: JSON.parse(fs.readFileSync(p.join(d, "set
     env: { ...env, PI_CODING_AGENT_DIR: source },
   });
   const out = JSON.parse(result.stdout);
-  assert.equal(out.settings.theme, "dark");
-  assert.equal(out.settings.defaultProvider, "concentrate");
-  assert.equal(out.hasAuth, false);
+  expect(out.settings.theme).toBe("dark");
+  expect(out.settings.defaultProvider).toBe("concentrate");
+  expect(out.hasAuth).toBe(false);
 });
 
 test("the tool's exit code is propagated", () => {
   const { bin, env } = setup();
   fakeTool(bin, "claude", { exitCode: 7 });
-  assert.equal(runCn(["claude"], { env }).status, 7);
+  expect(runCn(["claude"], { env }).status).toBe(7);
 });
 
 test("argument parsing", () => {
-  assert.deepEqual(parseLaunchArgs([]), { model: undefined, forwarded: [] });
-  assert.deepEqual(parseLaunchArgs(["--model", "m", "--", "-p", "x"]), {
+  expect(parseLaunchArgs([])).toStrictEqual({
+    model: undefined,
+    forwarded: [],
+  });
+  expect(parseLaunchArgs(["--model", "m", "--", "-p", "x"])).toStrictEqual({
     model: "m",
     forwarded: ["-p", "x"],
   });
-  assert.deepEqual(parseLaunchArgs(["--model=m"]), {
+  expect(parseLaunchArgs(["--model=m"])).toStrictEqual({
     model: "m",
     forwarded: [],
   });
-  assert.deepEqual(parseLaunchArgs(["-p", "x"]), {
+  expect(parseLaunchArgs(["-p", "x"])).toStrictEqual({
     model: undefined,
     forwarded: ["-p", "x"],
   });
-  assert.throws(() => parseLaunchArgs(["--model"]), /needs a model ID/);
-  assert.throws(() => parseFlags(["--nope"]), /Unknown option/);
-  assert.deepEqual(
+  expect(() => parseLaunchArgs(["--model"])).toThrow(/needs a model ID/);
+  expect(() => parseFlags(["--nope"])).toThrow(/Unknown option/);
+  expect(
     parseFlags(["claude", "--search", "x"], { values: ["search"] }),
-    {
-      flags: { search: "x" },
-      positionals: ["claude"],
-    },
-  );
+  ).toStrictEqual({
+    flags: { search: "x" },
+    positionals: ["claude"],
+  });
 });
 
 test("unknown commands and tools exit 2", () => {
   const { env } = setup();
-  assert.equal(runCn(["bogus"], { env }).status, 2);
-  assert.equal(runCn(["model", "nope"], { env }).status, 2);
-  assert.equal(runCn(["models", "--limit", "0"], { env }).status, 2);
+  expect(runCn(["bogus"], { env }).status).toBe(2);
+  expect(runCn(["model", "nope"], { env }).status).toBe(2);
+  expect(runCn(["models", "--limit", "0"], { env }).status).toBe(2);
 });
 
 test("setup asks only for the key; config, model, and logout work end to end", () => {
@@ -525,37 +515,32 @@ test("setup asks only for the key; config, model, and logout work end to end", (
     env,
     input: "sk-piped\n",
   });
-  assert.equal(setupResult.status, 0, setupResult.stderr);
-  assert.match(setupResult.stdout, /ready/);
-  assert.match(setupResult.stdout, /cn claude\s+claude-sonnet-4-6/);
-  assert.doesNotMatch(
-    setupResult.stdout,
+  expect(setupResult.status, setupResult.stderr).toBe(0);
+  expect(setupResult.stdout).toMatch(/ready/);
+  expect(setupResult.stdout).toMatch(/cn claude\s+claude-sonnet-4-6/);
+  expect(setupResult.stdout, "no per-tool model questions").not.toMatch(
     /default model/,
-    "no per-tool model questions",
   );
-  assert.equal(
+  expect(
     JSON.parse(fs.readFileSync(path.join(config, "credentials.json"), "utf8"))
       .api_key,
-    "sk-piped",
-  );
-  assert.equal(
+  ).toBe("sk-piped");
+  expect(
     fs.existsSync(path.join(config, "config.json")),
-    false,
     "defaults need no config file",
-  );
+  ).toBe(false);
 
   const modelResult = runCn(["model", "claude", "claude-opus-4-6"], { env });
-  assert.match(
-    modelResult.stdout,
+  expect(modelResult.stdout).toMatch(
     /Claude Code\s+default model claude-opus-4-6/,
   );
   const configResult = runCn(["config"], { env });
-  assert.match(configResult.stdout, /api key\s+stored/);
-  assert.match(configResult.stdout, /Claude Code\s+claude-opus-4-6/);
-  assert.doesNotMatch(configResult.stdout, /sk-piped/);
+  expect(configResult.stdout).toMatch(/api key\s+stored/);
+  expect(configResult.stdout).toMatch(/Claude Code\s+claude-opus-4-6/);
+  expect(configResult.stdout).not.toMatch(/sk-piped/);
 
-  assert.match(runCn(["logout"], { env }).stdout, /saved key removed/);
-  assert.match(runCn(["config"], { env }).stdout, /api key\s+missing/);
+  expect(runCn(["logout"], { env }).stdout).toMatch(/saved key removed/);
+  expect(runCn(["config"], { env }).stdout).toMatch(/api key\s+missing/);
 });
 
 test("setup --models also asks for each tool's default", () => {
@@ -564,9 +549,9 @@ test("setup --models also asks for each tool's default", () => {
     env,
     input: "sk-piped\n\n\n\n\n",
   });
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Claude Code default model/);
-  assert.equal(fs.existsSync(path.join(config, "config.json")), true);
+  expect(result.status, result.stderr).toBe(0);
+  expect(result.stdout).toMatch(/Claude Code default model/);
+  expect(fs.existsSync(path.join(config, "config.json"))).toBe(true);
 });
 
 test("reset needs --yes when not interactive, keeps Pi sessions, and can remove them", () => {
@@ -576,36 +561,36 @@ test("reset needs --yes when not interactive, keeps Pi sessions, and can remove 
   fs.writeFileSync(path.join(config, "pi-sessions", "s.jsonl"), "{}");
 
   const refused = runCn(["reset"], { env });
-  assert.equal(refused.status, 2);
-  assert.match(refused.stderr, /--yes/);
-  assert.ok(
+  expect(refused.status).toBe(2);
+  expect(refused.stderr).toMatch(/--yes/);
+  expect(
     fs.existsSync(path.join(config, "credentials.json")),
     "nothing removed without confirmation",
-  );
+  ).toBeTruthy();
 
   const done = runCn(["reset", "--yes"], { env });
-  assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, /removed\s+credentials\.json/);
-  assert.match(done.stdout, /Pi sessions/);
+  expect(done.status, done.stderr).toBe(0);
+  expect(done.stdout).toMatch(/removed\s+credentials\.json/);
+  expect(done.stdout).toMatch(/Pi sessions/);
   for (const name of ["credentials.json", "config.json", "catalog.json"]) {
-    assert.equal(fs.existsSync(path.join(config, name)), false, name);
+    expect(fs.existsSync(path.join(config, name)), name).toBe(false);
   }
-  assert.ok(
+  expect(
     fs.existsSync(path.join(config, "pi-sessions", "s.jsonl")),
     "sessions are kept by default",
-  );
+  ).toBeTruthy();
 
-  assert.equal(runCn(["reset", "--yes", "--sessions"], { env }).status, 0);
-  assert.equal(fs.existsSync(config), false, "empty config dir is removed");
-  assert.match(runCn(["reset"], { env }).stdout, /already fresh/);
+  expect(runCn(["reset", "--yes", "--sessions"], { env }).status).toBe(0);
+  expect(fs.existsSync(config), "empty config dir is removed").toBe(false);
+  expect(runCn(["reset"], { env }).stdout).toMatch(/already fresh/);
 });
 
 test("reset leaves an environment key alone and says so", () => {
   const { config, env } = setup({ CONCENTRATE_API_KEY: "sk-env" });
   runCn(["model", "claude", "claude-opus-4-6"], { env });
   const result = runCn(["reset", "--yes"], { env });
-  assert.match(result.stdout, /CONCENTRATE_API_KEY is still set/);
-  assert.equal(fs.existsSync(path.join(config, "config.json")), false);
+  expect(result.stdout).toMatch(/CONCENTRATE_API_KEY is still set/);
+  expect(fs.existsSync(path.join(config, "config.json"))).toBe(false);
 });
 
 test("claude never receives the user's own Anthropic credentials or a bypass flag", () => {
@@ -626,24 +611,23 @@ require("node:fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify(proce
     CLAUDE_CODE_USE_VERTEX: "1",
     CLAUDE_CODE_USE_FOUNDRY: "1",
   };
-  assert.equal(runCn(["claude"], { env: { ...env, ...leaky } }).status, 0);
+  expect(runCn(["claude"], { env: { ...env, ...leaky } }).status).toBe(0);
   const seen = JSON.parse(fs.readFileSync(record, "utf8"));
   for (const name of Object.keys(leaky))
-    assert.equal(seen[name], undefined, name);
-  assert.equal(seen.ANTHROPIC_API_KEY, undefined);
-  assert.equal(seen.CN_CLAUDE_KEY, "sk-test");
-  assert.equal(seen.ANTHROPIC_BASE_URL, "https://api.concentrate.ai");
+    expect(seen[name], name).toBe(undefined);
+  expect(seen.ANTHROPIC_API_KEY).toBe(undefined);
+  expect(seen.CN_CLAUDE_KEY).toBe("sk-test");
+  expect(seen.ANTHROPIC_BASE_URL).toBe("https://api.concentrate.ai");
 });
 
 test("a relative PATH entry never resolves a tool from the current directory", async () => {
-  const { which } = await import("../dist/lib/launch.js");
   const dir = tempDir();
   fs.writeFileSync(path.join(dir, "claude"), "#!/bin/sh\n", { mode: 0o755 });
   const cwd = process.cwd();
   process.chdir(dir);
   try {
-    assert.equal(which("claude", "."), null);
-    assert.equal(which("claude", dir), path.join(dir, "claude"));
+    expect(which("claude", ".")).toBe(null);
+    expect(which("claude", dir)).toBe(path.join(dir, "claude"));
   } finally {
     process.chdir(cwd);
   }
@@ -656,13 +640,12 @@ test("a model ID that looks like a flag is refused before anything launches", ()
     ["claude", "--model", "--dangerously-skip-permissions"],
     { env },
   );
-  assert.equal(result.status, 2);
-  assert.match(result.stderr, /Not a valid model ID/);
-  assert.equal(fs.existsSync(path.join(bin, "claude.record.json")), false);
+  expect(result.status).toBe(2);
+  expect(result.stderr).toMatch(/Not a valid model ID/);
+  expect(fs.existsSync(path.join(bin, "claude.record.json"))).toBe(false);
 });
 
 test("the Codex catalog ranks models in cn's order, first model first", async () => {
-  const { writeCodexCatalog } = await import("../dist/lib/pickers.js");
   const dir = tempDir();
   const fakeCodex = path.join(dir, "codex");
   fakeTool(dir, "codex");
@@ -679,7 +662,7 @@ test("the Codex catalog ranks models in cn's order, first model first", async ()
     m.slug,
     m.priority,
   ]);
-  assert.deepEqual(ranks, [
+  expect(ranks).toStrictEqual([
     ["a", 1],
     ["b", 2],
     ["c", 3],
