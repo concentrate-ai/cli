@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Requires Node.js 22.13 or newer.** The installer, `cn update`, and `cn`
+  itself stop with a clear message on older Node; install a current Node.js
+  first.
+- Install and update downloads now come from the `concentrateai-hq/cli`
+  repository. Old links keep redirecting.
+
 ## 0.1.4 (2026-11-02)
 
 - Pi and OpenCode cost estimates include cache-write prices for GPT-5.6,

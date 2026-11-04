@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Installs the Concentrate AI CLI (`cn`). Runs on Node.js 18.18+. Source checkouts need npm to build.
+# Installs the Concentrate AI CLI (`cn`). Runs on Node.js 22.13+. Source checkouts need pnpm to build.
 #   From a checkout:   ./install.sh
-#   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
+#   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | bash
 # Piped from the web, downloads a built, checksummed release from GitHub Releases.
 # Set CN_INSTALL_VERSION=0.1.0 to pin a release; the default is latest.
 set -euo pipefail
 
-MIN_NODE_MAJOR=18
-MIN_NODE_MINOR=18
-RELEASES_URL="https://github.com/concentrate-ai/cli/releases"
+MIN_NODE_MAJOR=22
+MIN_NODE_MINOR=13
+RELEASES_URL="https://github.com/concentrateai-hq/cli/releases"
 RELEASE_VERSION="${CN_INSTALL_VERSION:-latest}"
 script_dir=""
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
@@ -43,13 +43,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-node_major() {
-  node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0
-}
-
 node_ok() {
   command -v node >/dev/null 2>&1 || return 1
-  node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 18 || (major === 18 && minor >= 18) ? 0 : 1)'
+  local major minor
+  IFS=. read -r major minor _ <<<"$(node -p process.versions.node)"
+  ((major > MIN_NODE_MAJOR || (major == MIN_NODE_MAJOR && minor >= MIN_NODE_MINOR)))
 }
 
 node_help() {
@@ -153,18 +151,15 @@ locate_package
 
 # Release packages contain dist; source checkouts compile before replacing an install.
 if [[ -f "$package_dir/src/bin/cn.ts" ]]; then
-  command -v npm >/dev/null 2>&1 || { echo "npm is required to build this source checkout." >&2; exit 1; }
+  command -v pnpm >/dev/null 2>&1 || { echo "pnpm is required to build this source checkout." >&2; exit 1; }
   (
     cd "$package_dir"
-    # Reinstall when a tool is missing or the lockfile moved on.
-    if [[ ! -x node_modules/.bin/tsc || ! -x node_modules/.bin/esbuild || ! -d node_modules/smol-toml || ! -d node_modules/jsonc-parser || ! -f node_modules/.package-lock.json || package-lock.json -nt node_modules/.package-lock.json ]]; then
-      npm ci --include=dev --ignore-scripts
-    fi
-    npm run build
+    pnpm install --frozen-lockfile
+    pnpm build
   )
 fi
 if [[ ! -f "$package_dir/dist/bin/cn.js" ]]; then
-  echo "The package does not contain a built CLI. Run npm ci and npm run build." >&2
+  echo "The package does not contain a built CLI. Run pnpm install and pnpm build." >&2
   exit 1
 fi
 
@@ -193,7 +188,7 @@ sh_quote() {
   cat <<'LAUNCHER'
 [ -x "$NODE_BIN" ] || NODE_BIN="$(command -v node 2>/dev/null)"
 if [ -z "$NODE_BIN" ]; then
-  echo "cn: Node.js was not found. Install Node 18.18+ and rerun the installer." >&2
+  echo "cn: Node.js was not found. Install Node 22.13+ and rerun the installer." >&2
   exit 127
 fi
 LAUNCHER

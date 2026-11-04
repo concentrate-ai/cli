@@ -4,12 +4,12 @@ import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
-import { prepareClaudeContext } from "../claude-context.js";
-import { prepareClaudeProfile } from "../claude-profile.js";
-import { repairClaudeSessions } from "../claude-session-repair.js";
+import { prepareClaudeContext } from "../claude/claude-context.js";
+import { prepareClaudeProfile } from "../claude/claude-profile.js";
+import { repairClaudeSessions } from "../claude/claude-session-repair.js";
 import { API_ROOT } from "../catalog.js";
-import { CLAUDE_BLANKED, CLAUDE_KEY_VAR, claudeSettings } from "../pickers.js";
-import { filesIn, lastModelInTranscript, regularFile } from "../recall.js";
+import { CLAUDE_BLANKED, CLAUDE_KEY_VAR, claudeSettings } from "./pickers.js";
+import { filesIn, lastModelInTranscript, regularFile } from "./recall.js";
 
 const RESUMES = [
   "-c",

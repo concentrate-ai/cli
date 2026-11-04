@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { spawn } from "node:child_process";
-const { prepareClaudeContext } = await import(process.env.CN_PROBE_CONTEXT_MODULE || "../dist/lib/claude-context.js");
+const { prepareClaudeContext } = await import(process.env.CN_PROBE_CONTEXT_MODULE || "../dist/lib/claude/claude-context.js");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cn-capability-probe-"));
 const available = [
   { id: "cn-test-small", context: 128000, output: 4096, reasoningSupport: false, efforts: ["none"] },

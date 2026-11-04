@@ -7,9 +7,9 @@ import http from "node:http";
 import { execFile, spawn, spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 const { configureTool, resetTool, toolConfigPaths } = await import(
-  process.env.CN_PROBE_TOOL_CONFIG_MODULE || "../dist/lib/tool-config.js"
+  process.env.CN_PROBE_TOOL_CONFIG_MODULE || "../dist/lib/harnesses/tool-config.js"
 );
-import { writeJson, writeKey, writePreferences } from "../dist/lib/settings.js";
+import { writeJson, writeKey, writePreferences } from "../dist/lib/config/settings.js";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cn-native-client-probe-"));
 const env = {
   PATH: process.env.PATH,

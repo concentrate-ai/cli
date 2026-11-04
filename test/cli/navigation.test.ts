@@ -1,0 +1,83 @@
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { test, expect } from "vitest";
+import { BIN } from "../helpers.js";
+
+const python = spawnSync("python3", ["--version"]);
+test(
+  "resume tool selector lists OpenCode sessions and opens the selected session",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("../fixtures/opencode-resume-navigation.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 25000,
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  },
+);
+test(
+  "resume picker finds subscription sessions and cancels without launching or leaving output",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("../fixtures/resume-navigation.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 20000,
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  },
+);
+test(
+  "interactive actions stay in cn and support returning to home",
+  {
+    skip: process.platform === "win32" || python.status !== 0,
+  },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("../fixtures/navigation.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  },
+);
+
+test(
+  "with no saved key, cn asks for it before showing the home menu",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("../fixtures/first-run-key.py", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, process.execPath, BIN], {
+      encoding: "utf8",
+      timeout: 20000,
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  },
+);
+
+test(
+  "the key screen verifies in place, lets a rejected key be fixed, and never echoes it",
+  { skip: process.platform === "win32" || python.status !== 0 },
+  () => {
+    const fixture = fileURLToPath(
+      new URL("../fixtures/key-entry.py", import.meta.url),
+    );
+    const harness = fileURLToPath(
+      new URL("../fixtures/key-entry-harness.mjs", import.meta.url),
+    );
+    const result = spawnSync("python3", [fixture, harness], {
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    expect(result.status, result.stderr || result.stdout).toBe(0);
+  },
+);

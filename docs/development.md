@@ -1,20 +1,20 @@
 # Development
 
 The CLI is written in strict TypeScript. TOML and JSONC parsers are bundled at build time; the installed CLI needs Node.js and no `node_modules`. TypeScript, esbuild, ESLint, Prettier, and the parser packages are development dependencies only. Bundled parser licenses are included in the generated module.
-Use Node.js 18.18+ and npm.
+Use Node.js 22.13+ and pnpm.
 
 ```sh
-npm ci
-npm run check
+pnpm install
+pnpm check
 ```
 
-`check` runs strict type checking, linting, formatting verification, and the regression suite. `npm run build` compiles `src/` into `dist/` and bundles the configuration parsers; tests and compatibility probes use that compiled output. Run `npm run format` after edits. A failed compilation emits no new JavaScript.
+`check` runs linting, formatting verification, and the vitest suite with coverage. The suite builds once first (`pnpm build`, strict type checking included), so a type error fails `check`. `pnpm build` compiles `src/` into `dist/` and bundles the configuration parsers. Unit tests import `src/`; black-box tests spawn the built `dist/bin/cn.js`, and tests of code that copies built files (the Claude mod, credential helpers) import `dist/`. Compatibility probes use the compiled output. Run `pnpm format` after edits. A failed compilation emits no new JavaScript.
 
-The source layout keeps shared contracts in `src/lib/types.ts` and harness configuration contracts in `src/lib/harness-config.ts`. Catalog and file input pass through runtime guards in `validation.ts`; TypeScript types alone do not validate JSON. Effort definitions and selection rules live in `model-metadata.ts`. Each adapter implements the same `Harness` contract.
+The source layout keeps shared contracts in `src/lib/types.ts` and harness configuration contracts in `src/lib/harnesses/harness-config.ts`. Catalog and file input pass through runtime guards in `validation.ts`; TypeScript types alone do not validate JSON. Effort definitions and selection rules live in `model-metadata.ts`. Each adapter implements the same `Harness` contract.
 
 Claude's portable mod uses `.mts` source, which compiles to `.mjs` because the generated hook runs outside this package's module boundary. Its type-only host contract is erased from the emitted code.
 
-The installer builds source checkouts before replacing an installation. Built release packages need only `dist/`, `package.json`, and `install.sh`; they do not need npm or a compiler. `dist/` is generated and ignored by Git.
+The installer builds source checkouts before replacing an installation. Built release packages need only `dist/`, `package.json`, and `install.sh`; they do not need pnpm or a compiler. `dist/` is generated and ignored by Git.
 
 To check Claude Code integration against an installed client:
 
@@ -48,7 +48,7 @@ The installer approach and per-tool adapter layout were inspired by
 
 `tool-config.ts` builds native settings from the same model catalog and adapter helpers as session launches. `native-config-store.ts` owns private restore receipts, atomic file replacement, setup locks, and restoration that preserves later edits. JSONC edits preserve comments. TOML is edited in place so comments and layout survive Configure and an edited-file Reset; a file with an unusual structure falls back to being rewritten from its parsed values, which normalizes formatting. An untouched Reset restores the original bytes.
 
-`test/tool-config.test.mjs` covers all four tools, repeat setup/reset, credential helpers and rotation, JSONC, malformed files, and preservation of user edits. `test/fixtures/navigation.py` drives the real terminal UI in an isolated home. No tests use the user’s settings or real credentials.
+`test/harnesses/tool-config.test.ts` covers all four tools, repeat setup/reset, credential helpers and rotation, JSONC, malformed files, and preservation of user edits. `test/fixtures/navigation.py` drives the real terminal UI in an isolated home. No tests use the user’s settings or real credentials.
 
 To inspect permanent settings with the installed clients:
 

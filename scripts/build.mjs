@@ -10,14 +10,15 @@ const notices = [
   )
   .join("\n\n");
 await build({
-  entryPoints: ["src/lib/config-formats.ts"],
-  outfile: "dist/lib/config-formats.js",
+  entryPoints: ["src/lib/config/config-formats.ts"],
+  outfile: "dist/lib/config/config-formats.js",
   bundle: true,
   mainFields: ["module", "main"],
   platform: "node",
   format: "esm",
-  target: "node18.18",
-  external: ["./validation.js", "./errors.js"],
+  target: "node22.13",
+  // Our own modules stay shared (one CnError class); list any new relative import here.
+  external: ["../validation.js", "../errors.js"],
   footer: {
     js: `/* Third-party notices:\n${notices.replaceAll("*/", "* /")}\n*/`,
   },

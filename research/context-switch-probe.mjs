@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-const { prepareClaudeContext } = await import(process.env.CN_PROBE_CONTEXT_MODULE || "../dist/lib/claude-context.js");
+const { prepareClaudeContext } = await import(process.env.CN_PROBE_CONTEXT_MODULE || "../dist/lib/claude/claude-context.js");
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cn-context-switch-probe-"));
 const available = [{ id: "cn-test-large", context: 400000 }, { id: "cn-test-small", context: 128000 }, { id: "claude-sonnet-4-6", context: 200000 }];
