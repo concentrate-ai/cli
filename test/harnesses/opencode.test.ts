@@ -2,14 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
 
-import { withStandalone } from "../src/lib/harnesses/opencode.js";
-import { opencodeConfig } from "../src/lib/harnesses/pickers.js";
-import { runCn, tempDir } from "./helpers.js";
+import { withStandalone } from "../../src/lib/harnesses/opencode.js";
+import { opencodeConfig } from "../../src/lib/harnesses/pickers.js";
+import { runCn, setup } from "../helpers.js";
 
 // Stand-in OpenCode. FAKE_OC=v2 makes --help advertise --standalone, as the real v2 does.
 function rig(version) {
-  const bin = tempDir("cn-bin-");
-  const config = tempDir("cn-cfg-");
+  const { bin, env } = setup({ FAKE_OC: version });
   const record = path.join(bin, "record.json");
   fs.writeFileSync(
     path.join(bin, "opencode"),
@@ -23,12 +22,6 @@ fs.writeFileSync(${JSON.stringify(record)}, JSON.stringify({ args, config: proce
 `,
     { mode: 0o755 },
   );
-  const env = {
-    PATH: `${bin}:${path.dirname(process.execPath)}`,
-    CN_CONFIG_HOME: config,
-    CONCENTRATE_API_KEY: "sk-test",
-    FAKE_OC: version,
-  };
   return { env, seen: () => JSON.parse(fs.readFileSync(record, "utf8")) };
 }
 

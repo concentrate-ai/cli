@@ -13,9 +13,8 @@ import {
   needsSetup,
   environmentKey,
   configDir,
-} from "../src/lib/config/settings.js";
-import { tempDir } from "./helpers.js";
-import { maskKey } from "../src/lib/cli/commands.js";
+} from "../../src/lib/config/settings.js";
+import { tempDir } from "../helpers.js";
 import { homedir } from "node:os";
 
 const envFor = (dir, extra = {}) => ({ CN_CONFIG_HOME: dir, ...extra });
@@ -112,11 +111,6 @@ test("needsSetup is true only while there is no key", async () => {
   ).toBe(false);
   writeKey("stored", envFor(dir));
   expect(needsSetup(envFor(dir)), "no model choice is required").toBe(false);
-});
-
-test("maskKey hides the key and shows only the last four characters", async () => {
-  expect(maskKey("sk-live-abcdef123456")).toBe("••••••••3456");
-  expect(maskKey("short")).toBe("••••••••");
 });
 
 test("a tampered config.json cannot smuggle a flag or escape codes in as a model", () => {

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "vitest";
-import { BIN } from "./helpers.js";
+import { BIN } from "../helpers.js";
 
 const python = spawnSync("python3", ["--version"]);
 test(
@@ -9,7 +9,7 @@ test(
   { skip: process.platform === "win32" || python.status !== 0 },
   () => {
     const fixture = fileURLToPath(
-      new URL("./fixtures/opencode-resume-navigation.py", import.meta.url),
+      new URL("../fixtures/opencode-resume-navigation.py", import.meta.url),
     );
     const result = spawnSync("python3", [fixture, process.execPath, BIN], {
       encoding: "utf8",
@@ -23,7 +23,7 @@ test(
   { skip: process.platform === "win32" || python.status !== 0 },
   () => {
     const fixture = fileURLToPath(
-      new URL("./fixtures/resume-navigation.py", import.meta.url),
+      new URL("../fixtures/resume-navigation.py", import.meta.url),
     );
     const result = spawnSync("python3", [fixture, process.execPath, BIN], {
       encoding: "utf8",
@@ -39,7 +39,7 @@ test(
   },
   () => {
     const fixture = fileURLToPath(
-      new URL("./fixtures/navigation.py", import.meta.url),
+      new URL("../fixtures/navigation.py", import.meta.url),
     );
     const result = spawnSync("python3", [fixture, process.execPath, BIN], {
       encoding: "utf8",
@@ -54,7 +54,7 @@ test(
   { skip: process.platform === "win32" || python.status !== 0 },
   () => {
     const fixture = fileURLToPath(
-      new URL("./fixtures/first-run-key.py", import.meta.url),
+      new URL("../fixtures/first-run-key.py", import.meta.url),
     );
     const result = spawnSync("python3", [fixture, process.execPath, BIN], {
       encoding: "utf8",
@@ -69,10 +69,10 @@ test(
   { skip: process.platform === "win32" || python.status !== 0 },
   () => {
     const fixture = fileURLToPath(
-      new URL("./fixtures/key-entry.py", import.meta.url),
+      new URL("../fixtures/key-entry.py", import.meta.url),
     );
     const harness = fileURLToPath(
-      new URL("./fixtures/key-entry-harness.mjs", import.meta.url),
+      new URL("../fixtures/key-entry-harness.mjs", import.meta.url),
     );
     const result = spawnSync("python3", [fixture, harness], {
       encoding: "utf8",

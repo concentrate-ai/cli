@@ -84,3 +84,22 @@ export function runCn(args, { env = {}, input } = {}) {
     stderr: result.stderr,
   };
 }
+
+// A PATH with only fake tools and node, a private config dir, and a dummy key.
+export function setup(extraEnv = {}) {
+  const bin = tempDir("cn-bin-");
+  const config = tempDir("cn-cfg-");
+  const nodeDir = path.dirname(process.execPath);
+  return {
+    bin,
+    config,
+    env: {
+      PATH: `${bin}:${nodeDir}`,
+      CN_CONFIG_HOME: config,
+      CONCENTRATE_API_KEY: "sk-test",
+      // Never read the developer's real Codex config.
+      CODEX_HOME: tempDir("cn-codex-home-"),
+      ...extraEnv,
+    },
+  };
+}

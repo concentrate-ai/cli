@@ -338,3 +338,46 @@ test.each([[[]], [["--include-non-interactive"]]])(
     ).toStrictEqual(["exec", "resume", "scripted", "go"]);
   },
 );
+
+test("Claude session aliases preserve IDs, native flags, model overrides, and literal prompts", () => {
+  expect(
+    parseHarnessLaunchArgs("claude", ["resume", "saved-session"]),
+  ).toStrictEqual({
+    model: undefined,
+    forwarded: ["--resume", "saved-session"],
+  });
+  expect(
+    parseHarnessLaunchArgs("claude", ["continue"]).forwarded,
+  ).toStrictEqual(["--continue"]);
+  expect(parseHarnessLaunchArgs("claude", ["resume"]).forwarded).toStrictEqual([
+    "--resume",
+  ]);
+  expect(
+    parseHarnessLaunchArgs("claude", [
+      "--model",
+      "claude-sonnet-5",
+      "resume",
+      "saved-session",
+    ]),
+  ).toStrictEqual({
+    model: "claude-sonnet-5",
+    forwarded: ["--resume", "saved-session"],
+  });
+  expect(
+    parseHarnessLaunchArgs("claude", ["--", "resume"]).forwarded,
+  ).toStrictEqual(["resume"]);
+  expect(
+    parseHarnessLaunchArgs("claude", [
+      "resume",
+      "saved-session",
+      "--",
+      "continue",
+    ]).forwarded,
+  ).toStrictEqual(["--resume", "saved-session", "--", "continue"]);
+  expect(
+    parseHarnessLaunchArgs("claude", ["--resume", "saved-session"]).forwarded,
+  ).toStrictEqual(["--resume", "saved-session"]);
+  expect(
+    parseHarnessLaunchArgs("codex", ["resume", "saved-session"]).forwarded,
+  ).toStrictEqual(["resume", "saved-session"]);
+});

@@ -5,9 +5,9 @@ import { test, expect } from "vitest";
 import {
   withSetupLock,
   hasNativeSetup,
-} from "../src/lib/config/native-config-store.js";
-import { readStoredKey, writeKey } from "../src/lib/config/settings.js";
-import { fakeTool, runCn, tempDir } from "./helpers.js";
+} from "../../src/lib/config/native-config-store.js";
+import { readStoredKey, writeKey } from "../../src/lib/config/settings.js";
+import { fakeTool, runCn, tempDir } from "../helpers.js";
 
 function home() {
   const dir = tempDir("cn-recovery-");

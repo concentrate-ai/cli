@@ -4,8 +4,8 @@ import { test, expect } from "vitest";
 import {
   clearForeignRequestIds,
   repairClaudeSessions,
-} from "../src/lib/claude/claude-session-repair.js";
-import { tempDir } from "./helpers.js";
+} from "../../src/lib/claude/claude-session-repair.js";
+import { tempDir } from "../helpers.js";
 
 const id = "410110a1-cb69-4cb7-b56e-c570abba102b";
 const rows = [

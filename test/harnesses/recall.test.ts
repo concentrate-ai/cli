@@ -3,9 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
 
-import { launch } from "../dist/lib/cli/launch.js";
-import { readPreferences, writeJson } from "../dist/lib/config/settings.js";
-import { tempDir } from "./helpers.js";
+import { launch } from "../../dist/lib/cli/launch.js";
+import { readPreferences, writeJson } from "../../dist/lib/config/settings.js";
+import { setup, tempDir } from "../helpers.js";
 
 const CATALOG = [
   {
@@ -32,23 +32,15 @@ const CATALOG = [
 ];
 
 function rig({ catalog = true } = {}) {
-  const bin = tempDir("cn-bin-");
-  const config = tempDir("cn-cfg-");
   const claudeHome = tempDir("cn-claude-");
-  const codexHome = tempDir("cn-codex-");
+  const { bin, config, env } = setup({ CLAUDE_CONFIG_DIR: claudeHome });
+  const codexHome = env.CODEX_HOME;
   if (catalog)
     writeJson(path.join(config, "catalog.json"), {
       version: 6,
       fetchedAt: Date.now() / 1000,
       models: CATALOG,
     });
-  const env = {
-    PATH: `${bin}:${path.dirname(process.execPath)}`,
-    CN_CONFIG_HOME: config,
-    CONCENTRATE_API_KEY: "sk-test",
-    CLAUDE_CONFIG_DIR: claudeHome,
-    CODEX_HOME: codexHome,
-  };
   const tool = (name, body) =>
     fs.writeFileSync(
       path.join(bin, name),

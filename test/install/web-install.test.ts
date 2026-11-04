@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { spawnSync, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "vitest";
-import { tempDir } from "./helpers.js";
-const root = fileURLToPath(new URL("../", import.meta.url));
+import { tempDir } from "../helpers.js";
+const root = fileURLToPath(new URL("../../", import.meta.url));
 const installer = fs.readFileSync(path.join(root, "install.sh"), "utf8");
 function fixture() {
   const dir = fs.realpathSync(tempDir("cn-web-install-"));

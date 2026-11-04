@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { test, expect } from "vitest";
-import { summarize } from "../dist/lib/catalog.js";
-import { parseConfig } from "../dist/lib/config/config-formats.js";
+import { summarize } from "../../dist/lib/catalog.js";
+import { parseConfig } from "../../dist/lib/config/config-formats.js";
 import {
   codexProviderPresent,
   configureCodexProvider,
@@ -12,17 +12,17 @@ import {
   resetTool,
   toolConfigured,
   toolConfigPaths,
-} from "../dist/lib/harnesses/tool-config.js";
+} from "../../dist/lib/harnesses/tool-config.js";
 import {
   readJson,
   writeJson,
   writeKey,
   writePreferences,
-} from "../dist/lib/config/settings.js";
-import { applyNativeSetup } from "../dist/lib/config/native-config-store.js";
-import { runLogout } from "../dist/lib/cli/commands.js";
-import { refreshConfiguredTools } from "../dist/lib/cli/update.js";
-import { fakeTool, tempDir, runCn } from "./helpers.js";
+} from "../../dist/lib/config/settings.js";
+import { applyNativeSetup } from "../../dist/lib/config/native-config-store.js";
+import { runLogout } from "../../dist/lib/cli/commands.js";
+import { refreshConfiguredTools } from "../../dist/lib/cli/update.js";
+import { fakeTool, tempDir, runCn } from "../helpers.js";
 import { pathToFileURL } from "node:url";
 
 const models = ["gpt-small", "gpt-large"].map((id, index) =>

@@ -11,7 +11,7 @@ The `cn` CLI: one Concentrate key for every coding agent. Strict TypeScript, Nod
 | Everything CI runs | `pnpm check` (lint, format check, build, tests with coverage) |
 | Type-check only | `pnpm typecheck` |
 | Fix formatting | `pnpm format` |
-| One test file / one test | `pnpm vitest run test/<file>.test.ts [-t "<name>"]` |
+| One test file / one test | `pnpm vitest run test/<area>/<file>.test.ts [-t "<name>"]` |
 
 ## Layout
 
@@ -24,7 +24,7 @@ The `cn` CLI: one Concentrate key for every coding agent. Strict TypeScript, Nod
 | `src/lib/config/` | Settings, native config stores, and the TOML/JSONC parsers. |
 | `src/lib/ui/` | Terminal rendering. |
 | `src/lib/*.ts` | Shared contracts (`types`, `errors`, `validation`), the catalog, sessions, version and changelog. |
-| `test/` | Vitest suite; `test/fixtures/` holds pty drivers and stub tools. |
+| `test/` | Vitest suite. Folders mirror `src/lib` (`cli/`, `claude/`, `config/`, `harnesses/`) plus `install/` for `install.sh`; an area with one file sits at the root. `helpers.ts` is shared; `fixtures/` holds pty drivers and stub tools. |
 | `research/` | One-off compatibility probes. Not linted or formatted. |
 
 ## Rules specific to this repo

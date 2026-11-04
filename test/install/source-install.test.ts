@@ -3,11 +3,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "vitest";
-import { summarize } from "../src/lib/catalog.js";
-import { writeJson, writePreferences } from "../src/lib/config/settings.js";
-import { fakeTool, tempDir } from "./helpers.js";
+import { summarize } from "../../src/lib/catalog.js";
+import { writeJson, writePreferences } from "../../src/lib/config/settings.js";
+import { fakeTool, tempDir } from "../helpers.js";
 
-const root = fileURLToPath(new URL("../", import.meta.url));
+const root = fileURLToPath(new URL("../../", import.meta.url));
 
 // Source installs build in place, so each runs from its own copy of the checkout.
 function checkout(dir) {
@@ -80,7 +80,7 @@ test("source install produces a self-contained CLI and launches all four adapter
   const run = (args) =>
     spawnSync(cn, args, { env, encoding: "utf8", timeout: 10000 });
   expect(run(["--version"]).stdout.trim()).toBe(
-    JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url)))
+    JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url)))
       .version,
   );
   expect(run(["--help"]).stdout).toMatch(/claude, codex, opencode, pi/);

@@ -5,11 +5,11 @@ import {
   appHeaders,
   codexHeaderConfig,
   openCodeHeaders,
-} from "../src/lib/harnesses/app-headers.js";
-import { tempDir } from "./helpers.js";
-import codex from "../src/lib/harnesses/codex.js";
-import pi from "../src/lib/harnesses/pi.js";
-import opencode from "../src/lib/harnesses/opencode.js";
+} from "../../src/lib/harnesses/app-headers.js";
+import { tempDir } from "../helpers.js";
+import codex from "../../src/lib/harnesses/codex.js";
+import pi from "../../src/lib/harnesses/pi.js";
+import opencode from "../../src/lib/harnesses/opencode.js";
 
 test("header names are case-insensitive, values and unrelated headers survive", () => {
   expect(

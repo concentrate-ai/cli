@@ -3,16 +3,16 @@ import {
   isNewer,
   refreshConfiguredTools,
   updateNotice,
-} from "../src/lib/cli/update.js";
-import { writeJson } from "../src/lib/config/settings.js";
-import { version } from "../src/lib/version.js";
+} from "../../src/lib/cli/update.js";
+import { writeJson } from "../../src/lib/config/settings.js";
+import { version } from "../../src/lib/version.js";
 import path from "node:path";
-import { tempDir } from "./helpers.js";
+import { tempDir } from "../helpers.js";
 import {
   changesSince,
   changelogSections,
   readChangelog,
-} from "../src/lib/changelog.js";
+} from "../../src/lib/changelog.js";
 
 const currentOrNewer = (sections) =>
   sections.filter((s) => !isNewer(version(), s.version));

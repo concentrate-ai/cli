@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
-import { prepareClaudeProfile } from "../src/lib/claude/claude-profile.js";
-import { tempDir } from "./helpers.js";
+import { prepareClaudeProfile } from "../../src/lib/claude/claude-profile.js";
+import { tempDir } from "../helpers.js";
 
 test("Claude profile isolates settings while sharing conversation files", () => {
   const root = tempDir("cn-profile-test-");

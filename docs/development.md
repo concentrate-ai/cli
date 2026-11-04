@@ -48,7 +48,7 @@ The installer approach and per-tool adapter layout were inspired by
 
 `tool-config.ts` builds native settings from the same model catalog and adapter helpers as session launches. `native-config-store.ts` owns private restore receipts, atomic file replacement, setup locks, and restoration that preserves later edits. JSONC edits preserve comments. TOML is edited in place so comments and layout survive Configure and an edited-file Reset; a file with an unusual structure falls back to being rewritten from its parsed values, which normalizes formatting. An untouched Reset restores the original bytes.
 
-`test/tool-config.test.ts` covers all four tools, repeat setup/reset, credential helpers and rotation, JSONC, malformed files, and preservation of user edits. `test/fixtures/navigation.py` drives the real terminal UI in an isolated home. No tests use the user’s settings or real credentials.
+`test/harnesses/tool-config.test.ts` covers all four tools, repeat setup/reset, credential helpers and rotation, JSONC, malformed files, and preservation of user edits. `test/fixtures/navigation.py` drives the real terminal UI in an isolated home. No tests use the user’s settings or real credentials.
 
 To inspect permanent settings with the installed clients:
 
