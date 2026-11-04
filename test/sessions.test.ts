@@ -3,7 +3,6 @@ import path from "node:path";
 import { test, expect } from "vitest";
 import { parseHarnessLaunchArgs } from "../src/lib/cli/cli.js";
 import { codexSessions, resolveSessionArgs } from "../src/lib/sessions.js";
-import { getHarness } from "../src/lib/harnesses/registry.js";
 import { runCn, tempDir } from "./helpers.js";
 
 function rig() {
@@ -42,24 +41,6 @@ function codex(
     age,
   );
 }
-function pi(
-  env,
-  id,
-  { legacy = false, cwd = process.cwd(), age = 0, directory } = {},
-) {
-  return save(
-    path.join(
-      directory ||
-        (legacy
-          ? path.join(env.CN_CONFIG_HOME, "pi-sessions")
-          : path.join(env.PI_CODING_AGENT_DIR, "sessions", "--project--")),
-      `${id}.jsonl`,
-    ),
-    { type: "session", version: 3, id, cwd },
-    age,
-  );
-}
-
 test.each([
   ["claude", ["resume", "id"], ["--resume", "id"]],
   ["claude", ["resume"], ["--resume"]],

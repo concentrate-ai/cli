@@ -187,7 +187,7 @@ test("effort is clamped to supported named levels and unknown metadata leaves it
   expect(supportedEffort("max", ["none"])).toBe("max");
 });
 
-test("output and thinking overrides follow custom models and restore on native Claude", async (t) => {
+test("output and thinking overrides follow custom models and restore on native Claude", async () => {
   const plugin = prepareClaudeContext({
     available: [
       {
@@ -233,12 +233,9 @@ test("output and thinking overrides follow custom models and restore on native C
   const next = async function* (event) {
     requests.push(event);
   };
-  for await (const item of hooks.get("turn.step")(
-    $,
-    { model, effort: "max" },
-    next,
-  )) {
-  }
+  await Array.fromAsync(
+    hooks.get("turn.step")($, { model, effort: "max" }, next),
+  );
   expect(requests[0].effort).toBe("medium");
   model = "claude-sonnet-4-6";
   await hooks.get("classic.PostModelSwitch")($, {}, async () => ({}));

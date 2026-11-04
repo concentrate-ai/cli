@@ -19,9 +19,9 @@
     "build": "tsc -p tsconfig.json && node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --coverage",
-    "lint": "eslint src",
-    "format": "prettier --write src test scripts package.json tsconfig.json eslint.config.js",
-    "format:check": "prettier --check src test scripts package.json tsconfig.json eslint.config.js",
+    "lint": "eslint src test scripts vitest.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "check": "pnpm lint && pnpm format:check && pnpm test",
     "release:pack": "pnpm build && node scripts/package-release.mjs"
   },
