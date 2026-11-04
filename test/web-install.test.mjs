@@ -94,7 +94,7 @@ test("piped web install verifies a built release, needs no npm, preserves creden
   );
   assert.match(
     fs.readFileSync(f.env.CN_TEST_URLS, "utf8"),
-    /https:\/\/github\.com\/concentrate-ai\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,
+    /https:\/\/github\.com\/concentrateai-hq\/cli\/releases\/download\/v0\.1\.0\/concentrate-cli.tar.gz/,
   );
   assert.equal(fs.existsSync(path.join(f.runtime, "node_modules")), false);
   // The changelog ships with the install, for `cn changelog` and `cn update`.

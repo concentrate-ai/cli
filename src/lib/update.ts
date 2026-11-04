@@ -16,9 +16,9 @@ import { reconfigureTool, toolConfigured } from "./tool-config.js";
 import { interactive, select } from "./ui/widgets.js";
 import { version } from "./version.js";
 
-const RELEASES = "https://github.com/concentrate-ai/cli/releases";
+const RELEASES = "https://github.com/concentrateai-hq/cli/releases";
 const LATEST_API =
-  "https://api.github.com/repos/concentrate-ai/cli/releases/latest";
+  "https://api.github.com/repos/concentrateai-hq/cli/releases/latest";
 const TIMEOUT_MS = 15000;
 
 function parts(v: string) {

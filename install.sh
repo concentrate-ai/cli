@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Installs the Concentrate AI CLI (`cn`). Runs on Node.js 18.18+. Source checkouts need npm to build.
 #   From a checkout:   ./install.sh
-#   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
+#   From the web:      curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | bash
 # Piped from the web, downloads a built, checksummed release from GitHub Releases.
 # Set CN_INSTALL_VERSION=0.1.0 to pin a release; the default is latest.
 set -euo pipefail
 
 MIN_NODE_MAJOR=18
 MIN_NODE_MINOR=18
-RELEASES_URL="https://github.com/concentrate-ai/cli/releases"
+RELEASES_URL="https://github.com/concentrateai-hq/cli/releases"
 RELEASE_VERSION="${CN_INSTALL_VERSION:-latest}"
 script_dir=""
 if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then

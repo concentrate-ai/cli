@@ -23,7 +23,7 @@ and the coding tools you want to use installed on your `PATH`.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | bash
 cn
 ```
 

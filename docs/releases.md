@@ -35,8 +35,8 @@ checksum before installing, so no website hosting is needed.
 ## How users install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/concentrate-ai/cli/main/install.sh | CN_INSTALL_VERSION=0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/concentrateai-hq/cli/main/install.sh | CN_INSTALL_VERSION=0.1.0 bash
 ```
 
 The first form installs the latest release (`releases/latest/download`). The
