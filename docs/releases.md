@@ -23,15 +23,20 @@ checksum before installing, so no website hosting is needed.
    and `release/install.sh`. Customers need Node.js 22.13+, but not pnpm or a
    source checkout.
 
-3. Tag and push. The tag must match the version:
+3. Start the release, either way:
 
-   ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
+   - From GitHub: **Actions → Release CLI → Run workflow** on `main`. It
+     releases the version in `main`'s `package.json` and creates its tag.
+   - From a terminal: tag and push. The tag must match the version:
+
+     ```sh
+     git tag v0.1.0
+     git push origin v0.1.0
+     ```
 
    The `Release CLI` workflow runs the checks, builds the package, and publishes
    `concentrate-cli.tar.gz`, `SHA256SUMS`, and `install.sh` as release assets.
+   A version that already has a release fails; bump the version instead.
 
 ## How users install
 
