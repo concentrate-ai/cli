@@ -4,7 +4,6 @@ on:
   push:
     branches-ignore: [main, dev]
 permissions:
-  actions: write
   contents: read
   pull-requests: write
 jobs:
@@ -17,8 +16,6 @@ jobs:
           if [ "$(gh api "repos/$REPO/compare/dev...$BRANCH" --jq .ahead_by)" = 0 ]; then exit 0; fi
           TITLE="${TITLE%%$'\n'*}"
           gh pr create --repo "$REPO" --base dev --head "$BRANCH" --title "${TITLE:-$BRANCH}" --body "Auto-opened on push of \`$BRANCH\`."
-          # PRs opened with this token trigger no workflows, so start CI's required check by hand.
-          gh workflow run ci.yml --repo "$REPO" --ref "$BRANCH"
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
