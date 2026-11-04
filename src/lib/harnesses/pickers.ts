@@ -9,7 +9,7 @@ import {
   modelEfforts,
   defaultModelEffort,
 } from "../model-metadata.js";
-import { isRecord, record } from "../validation.js";
+import { isRecord, positiveTokens, record } from "../validation.js";
 import type { Effort, Environment, Model } from "../types.js";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -87,8 +87,6 @@ export function claudeSettings(
 }
 
 // Both OpenCode generations accept explicit model metadata, in different shapes.
-const positiveTokens = (value: number | null): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 
 // Claude's thinking setting on the Messages API for one reasoning level: an
 // effort for adaptive models, a token budget for older ones.
@@ -132,9 +130,11 @@ export function opencodeConfig(
 ) {
   const entries = Object.fromEntries(
     models.map((entry): [string, OpenCodeModel] => {
+      const context = positiveTokens(entry.context);
+      const output = positiveTokens(entry.output);
       const limit = {
-        ...(positiveTokens(entry.context) ? { context: entry.context } : {}),
-        ...(positiveTokens(entry.output) ? { output: entry.output } : {}),
+        ...(context ? { context } : {}),
+        ...(output ? { output } : {}),
       };
       const efforts = modelEfforts(entry);
       const claude = isClaudeModel(entry.id);
@@ -317,8 +317,10 @@ export function piConfig(
       input: entry.image ? ["text", "image"] : ["text"],
       reasoning: Boolean(entry.reasoning),
     };
-    if (positiveTokens(entry.context)) data.contextWindow = entry.context;
-    if (positiveTokens(entry.output)) data.maxTokens = entry.output;
+    const contextWindow = positiveTokens(entry.context);
+    const maxTokens = positiveTokens(entry.output);
+    if (contextWindow) data.contextWindow = contextWindow;
+    if (maxTokens) data.maxTokens = maxTokens;
     if (entry.cost) data.cost = entry.cost;
     // Concentrate's Messages endpoint caches a Claude conversation as it grows,
     // with Pi marking each new turn. On Responses the cache falls behind during
@@ -403,9 +405,7 @@ export function writeCodexCatalog(
   const instructions = messages.instructions_template;
   const entries = models.map((item, index) => {
     const efforts = modelEfforts(item) ?? [];
-    const context = positiveTokens(item.context)
-      ? item.context
-      : template.context_window;
+    const context = positiveTokens(item.context) ?? template.context_window;
     return {
       ...template,
       slug: item.id,
