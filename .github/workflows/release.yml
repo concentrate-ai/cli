@@ -2,10 +2,13 @@ name: Release CLI
 on:
   push:
     tags: ["v*"]
+  # Manual runs release the version in main's package.json.
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
   release:
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -14,13 +17,16 @@ jobs:
         with:
           node-version: "22"
           cache: pnpm
+      - name: Pick the release tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then tag="$GITHUB_REF_NAME"
+          else tag="v$(node -p 'require("./package.json").version')"; fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
       - run: pnpm install
       - run: pnpm check
       - run: pnpm release:pack
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
       - name: Publish checked release assets
-        run: gh release create "$RELEASE_TAG" release/concentrate-cli.tar.gz release/SHA256SUMS release/install.sh --verify-tag --title "$RELEASE_TAG" --notes-file release/NOTES.md
+        # Creates the tag at this commit on manual runs; fails if the release exists.
+        run: gh release create "$RELEASE_TAG" release/concentrate-cli.tar.gz release/SHA256SUMS release/install.sh --target "$GITHUB_SHA" --title "$RELEASE_TAG" --notes-file release/NOTES.md
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
