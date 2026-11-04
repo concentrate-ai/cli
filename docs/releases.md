@@ -19,7 +19,7 @@ checksum before installing, so no website hosting is needed.
    ```
 
    `release:pack` creates `release/concentrate-cli.tar.gz`, `release/SHA256SUMS`,
-   and `release/install.sh`. Customers need Node.js 18.18+, but not npm or a
+   and `release/install.sh`. Customers need Node.js 22.13+, but not npm or a
    source checkout.
 
 3. Tag and push. The tag must match the version:

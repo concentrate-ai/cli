@@ -130,6 +130,22 @@ test("a failed checksum preserves the existing installation", () => {
     "old-runtime",
   );
 });
+test("Node older than 22.13 is refused before anything is downloaded or installed", () => {
+  const f = fixture();
+  const preload = path.join(f.dir, "old-node.cjs");
+  fs.writeFileSync(
+    preload,
+    'Object.defineProperty(process.versions, "node", { value: "22.12.0" });\n',
+  );
+  const result = f.run({ NODE_OPTIONS: `--require=${preload}` });
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /Node\.js 22\.13\+ is required \(found 22\.12\.0\)/,
+  );
+  assert.equal(fs.existsSync(f.env.CN_TEST_URLS), false);
+  assert.equal(fs.existsSync(f.launcher), false);
+});
 test("an upgrade rolls back its runtime if launcher replacement fails", () => {
   const f = fixture();
   assert.equal(f.run().status, 0);

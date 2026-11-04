@@ -16,7 +16,7 @@ await build({
   mainFields: ["module", "main"],
   platform: "node",
   format: "esm",
-  target: "node18.18",
+  target: "node22.13",
   external: ["./validation.js", "./errors.js"],
   footer: {
     js: `/* Third-party notices:\n${notices.replaceAll("*/", "* /")}\n*/`,

@@ -1,7 +1,7 @@
 # Development
 
 The CLI is written in strict TypeScript. TOML and JSONC parsers are bundled at build time; the installed CLI needs Node.js and no `node_modules`. TypeScript, esbuild, ESLint, Prettier, and the parser packages are development dependencies only. Bundled parser licenses are included in the generated module.
-Use Node.js 18.18+ and npm.
+Use Node.js 22.13+ and npm.
 
 ```sh
 npm ci

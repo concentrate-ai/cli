@@ -7,7 +7,7 @@ Use one Concentrate API key with your favorite coding tools. `cn` launches them
 through Concentrate so your model access and usage stay in one place, and you
 can switch models without switching tools.
 
-Works on **macOS and Linux**. Requires **Node.js 18.18+**, a Concentrate API key,
+Works on **macOS and Linux**. Requires **Node.js 22.13+**, a Concentrate API key,
 and the coding tools you want to use installed on your `PATH`.
 
 ## Supported tools

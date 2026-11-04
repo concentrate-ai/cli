@@ -19,7 +19,7 @@ install command again.
 The installer puts `cn` in `~/.local/bin`. Add that folder to your `PATH`; the
 installer prints the exact line for your shell. Open a new terminal afterward.
 
-**`Node.js 18.18+ is required`**
+**`Node.js 22.13+ is required`**
 Install a current Node.js (for example with [nvm](https://github.com/nvm-sh/nvm)),
 then run the installer again.
 

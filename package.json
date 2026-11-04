@@ -13,7 +13,7 @@
     "install.sh"
   ],
   "engines": {
-    "node": ">=18.18"
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/build.mjs",
@@ -27,7 +27,7 @@
     "release:pack": "npm run build && node scripts/package-release.mjs"
   },
   "devDependencies": {
-    "@types/node": "^18.19.130",
+    "@types/node": "^22",
     "esbuild": "0.25.12",
     "eslint": "^9.39.5",
     "jsonc-parser": "3.3.1",
