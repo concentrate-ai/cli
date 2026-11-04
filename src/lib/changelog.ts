@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { isNewer } from "./update.js";
+import { isNewer } from "./cli/update.js";
 
 // CHANGELOG.md ships beside package.json. Each release is a "## x.y.z" section.
 export function readChangelog(): string | null {

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {spawn} from 'node:child_process';
-import {resolveKey} from '../dist/lib/settings.js';
+import {resolveKey} from '../dist/lib/config/settings.js';
 
 // Manual compatibility experiment, not a classifier implementation or safety evaluation.
 // The only proposed action writes a marker under a fresh temporary directory.

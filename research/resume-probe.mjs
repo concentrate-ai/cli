@@ -1,5 +1,5 @@
 // Resume installed clients through a localhost mock using synthetic keys and isolated homes.
-// Run after npm run build; optionally pass codex, pi, or opencode to limit the probe.
+// Run after pnpm build; optionally pass codex, pi, or opencode to limit the probe.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -8,7 +8,7 @@ import http from "node:http";
 import { spawn } from "node:child_process";
 import { getHarness } from "../dist/lib/harnesses/registry.js";
 import { resolveSessionArgs } from "../dist/lib/sessions.js";
-import { piConfig, opencodeConfig } from "../dist/lib/pickers.js";
+import { piConfig, opencodeConfig } from "../dist/lib/harnesses/pickers.js";
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cn-all-resume-"));
 console.log("Artifacts: " + root);
 const binaries = {

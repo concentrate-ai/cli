@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { opencodeConfig, piConfig, writeCodexCatalog } from "../dist/lib/pickers.js";
+import { opencodeConfig, piConfig, writeCodexCatalog } from "../dist/lib/harnesses/pickers.js";
 
 const models = [
   { id: "cn-small-probe", name: "Small", context: 32768, output: 4096, image: false, chat_candidate: true, reasoning: false, reasoningSupport: false, efforts: [] },

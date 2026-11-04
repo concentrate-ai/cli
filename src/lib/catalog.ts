@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { CnError } from "./errors.js";
 import { cleanText, isModelId, isOpenAiModel } from "./safe.js";
-import { configDir, readJson, writeJson } from "./settings.js";
+import { configDir, readJson, writeJson } from "./config/settings.js";
 
 export const API_ROOT = "https://api.concentrate.ai";
 const VALIDATION_MODEL = "deepseek-v4-1-flash";

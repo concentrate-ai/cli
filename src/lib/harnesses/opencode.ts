@@ -1,11 +1,11 @@
-import { openCodeHeaders } from "../app-headers.js";
+import { openCodeHeaders } from "./app-headers.js";
 import type { Harness } from "../types.js";
 import { execFileSync, spawnSync } from "node:child_process";
 import { CnError } from "../errors.js";
 import { optionValue } from "../sessions.js";
 
 import { API_ROOT } from "../catalog.js";
-import { opencodeConfig } from "../pickers.js";
+import { opencodeConfig } from "./pickers.js";
 
 import { supportsStandalone, withStandalone } from "./opencode-cli.js";
 export { supportsStandalone, withStandalone } from "./opencode-cli.js";

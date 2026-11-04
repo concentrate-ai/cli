@@ -19,7 +19,7 @@ install command again.
 The installer puts `cn` in `~/.local/bin`. Add that folder to your `PATH`; the
 installer prints the exact line for your shell. Open a new terminal afterward.
 
-**`Node.js 18.18+ is required`**
+**`Node.js 22.13+ is required`**
 Install a current Node.js (for example with [nvm](https://github.com/nvm-sh/nvm)),
 then run the installer again.
 
@@ -28,7 +28,7 @@ Nothing was changed. Run the installer again. If it keeps failing, report it.
 
 **`Could not download the CLI release`**
 You may be offline, or the version you asked for does not exist. Check
-[Releases](https://github.com/concentrate-ai/cli/releases), or drop
+[Releases](https://github.com/concentrateai-hq/cli/releases), or drop
 `CN_INSTALL_VERSION` to get the latest.
 
 ## Your API key
@@ -186,7 +186,7 @@ folder it names, then try again.
 
 ## Report a problem
 
-Open an issue at <https://github.com/concentrate-ai/cli/issues> with:
+Open an issue at <https://github.com/concentrateai-hq/cli/issues> with:
 
 - the output of `cn --version` and `cn doctor`
 - which tool you were using, and its version (for example `codex --version`)

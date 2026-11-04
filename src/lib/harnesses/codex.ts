@@ -2,7 +2,7 @@ import {
   codexConfigArguments,
   codexHeaderConfig,
   codexProviderHasCredential,
-} from "../app-headers.js";
+} from "./app-headers.js";
 import { record } from "../validation.js";
 import type { Harness, Environment } from "../types.js";
 import { spawnSync } from "node:child_process";
@@ -11,14 +11,14 @@ import os from "node:os";
 import path from "node:path";
 
 import { API_ROOT } from "../catalog.js";
-import { writeCodexCatalog } from "../pickers.js";
+import { writeCodexCatalog } from "./pickers.js";
 import {
   createdMs,
   filesIn,
   lastModelInTranscript,
   parseLine,
   regularFile,
-} from "../recall.js";
+} from "./recall.js";
 
 // Codex files sessions by date. Check local and UTC days at both ends of the run.
 function sessionDirs(env: Environment, startedAt: number) {

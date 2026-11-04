@@ -1,4 +1,4 @@
-import { appHeaders } from "../app-headers.js";
+import { appHeaders } from "./app-headers.js";
 import { record } from "../validation.js";
 import type { Harness, Environment, Model } from "../types.js";
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,7 @@ import path from "node:path";
 
 import { API_ROOT } from "../catalog.js";
 import { CnError } from "../errors.js";
-import { piConfig } from "../pickers.js";
+import { piConfig } from "./pickers.js";
 
 function piVersion(executable: string) {
   const out = spawnSync(executable, ["--version"], {
