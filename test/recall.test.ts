@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
 
-import { launch } from "../dist/lib/launch.js";
-import { readPreferences, writeJson } from "../dist/lib/settings.js";
+import { launch } from "../dist/lib/cli/launch.js";
+import { readPreferences, writeJson } from "../dist/lib/config/settings.js";
 import { tempDir } from "./helpers.js";
 
 const CATALOG = [

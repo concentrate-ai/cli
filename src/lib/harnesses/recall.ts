@@ -1,4 +1,4 @@
-import { isRecord } from "./validation.js";
+import { isRecord } from "../validation.js";
 import fs from "node:fs";
 import path from "node:path";
 

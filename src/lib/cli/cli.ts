@@ -1,6 +1,6 @@
-import { isConfigurableTool } from "./configurable-tools.js";
-import { CURSOR_NOTICE } from "./cursor-config.js";
-import type { Environment, HarnessId } from "./types.js";
+import { isConfigurableTool } from "../harnesses/configurable-tools.js";
+import { CURSOR_NOTICE } from "../config/cursor-config.js";
+import type { Environment, HarnessId } from "../types.js";
 import {
   offerCodexResume,
   runDoctor,
@@ -12,20 +12,20 @@ import {
   showConfig,
   showModels,
 } from "./commands.js";
-import { configureTool, resetTool } from "./tool-config.js";
-import { errorMessage } from "./validation.js";
-import { CnError, EXIT } from "./errors.js";
-import { isModelId } from "./safe.js";
-import { getHarness, isHarness, listHarnesses } from "./harnesses/registry.js";
+import { configureTool, resetTool } from "../harnesses/tool-config.js";
+import { errorMessage } from "../validation.js";
+import { CnError, EXIT } from "../errors.js";
+import { isModelId } from "../safe.js";
+import { getHarness, isHarness, listHarnesses } from "../harnesses/registry.js";
 import { launch, which } from "./launch.js";
 import { runLauncher, runSettings } from "./launcher.js";
 import { closePrompts } from "./prompt.js";
-import { needsSetup, readStoredKey } from "./settings.js";
-import { ledger } from "./ui/layout.js";
-import { interactive } from "./ui/widgets.js";
-import { changesSince, readChangelog } from "./changelog.js";
+import { needsSetup, readStoredKey } from "../config/settings.js";
+import { ledger } from "../ui/layout.js";
+import { interactive } from "../ui/widgets.js";
+import { changesSince, readChangelog } from "../changelog.js";
 import { offerUpdate, refreshConfiguredTools, runUpdate } from "./update.js";
-import { version } from "./version.js";
+import { version } from "../version.js";
 
 const HELP = `cn - Concentrate AI: one key for every coding agent (beta)
 

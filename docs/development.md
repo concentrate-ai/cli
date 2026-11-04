@@ -10,7 +10,7 @@ pnpm check
 
 `check` runs strict type checking, linting, formatting verification, and the regression suite. `pnpm build` compiles `src/` into `dist/` and bundles the configuration parsers; tests and compatibility probes use that compiled output. Run `pnpm format` after edits. A failed compilation emits no new JavaScript.
 
-The source layout keeps shared contracts in `src/lib/types.ts` and harness configuration contracts in `src/lib/harness-config.ts`. Catalog and file input pass through runtime guards in `validation.ts`; TypeScript types alone do not validate JSON. Effort definitions and selection rules live in `model-metadata.ts`. Each adapter implements the same `Harness` contract.
+The source layout keeps shared contracts in `src/lib/types.ts` and harness configuration contracts in `src/lib/harnesses/harness-config.ts`. Catalog and file input pass through runtime guards in `validation.ts`; TypeScript types alone do not validate JSON. Effort definitions and selection rules live in `model-metadata.ts`. Each adapter implements the same `Harness` contract.
 
 Claude's portable mod uses `.mts` source, which compiles to `.mjs` because the generated hook runs outside this package's module boundary. Its type-only host contract is erased from the emitted code.
 

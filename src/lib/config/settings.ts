@@ -1,12 +1,12 @@
-import type { Environment, HarnessId, Preferences } from "./types.js";
+import type { Environment, HarnessId, Preferences } from "../types.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { isRecord, errorCode, errorMessage } from "./validation.js";
-import { CnError } from "./errors.js";
-import { isApiKey, isModelId, isOpenAiModel } from "./safe.js";
+import { isRecord, errorCode, errorMessage } from "../validation.js";
+import { CnError } from "../errors.js";
+import { isApiKey, isModelId, isOpenAiModel } from "../safe.js";
 
 export const DEFAULT_MODELS = Object.freeze<Preferences>({
   claude: "claude-sonnet-4-6",

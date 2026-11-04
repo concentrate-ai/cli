@@ -12,17 +12,17 @@ import {
   CURSOR_KEY_ROW,
   CURSOR_SECRET_ROW,
   CURSOR_RECEIPT_ROW,
-} from "../src/lib/cursor-config.js";
+} from "../src/lib/config/cursor-config.js";
 import {
   readDatabaseRows,
   changeDatabaseRows,
-} from "../src/lib/sqlite-store.js";
+} from "../src/lib/config/sqlite-store.js";
 import {
   configureTool,
   resetTool,
   toolConfigured,
-} from "../src/lib/tool-config.js";
-import { writeKey, writeJson } from "../src/lib/settings.js";
+} from "../src/lib/harnesses/tool-config.js";
+import { writeKey, writeJson } from "../src/lib/config/settings.js";
 import { tempDir, runCn } from "./helpers.js";
 
 const ROOT = "https://api.concentrate.ai";

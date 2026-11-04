@@ -2,10 +2,10 @@ import { pathToFileURL } from "node:url";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { which } from "./executables.js";
-import { CnError } from "./errors.js";
-import { isRecord } from "./validation.js";
-import type { Environment } from "./types.js";
+import { which } from "../executables.js";
+import { CnError } from "../errors.js";
+import { isRecord } from "../validation.js";
+import type { Environment } from "../types.js";
 
 const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
 

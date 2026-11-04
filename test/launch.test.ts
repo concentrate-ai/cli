@@ -6,11 +6,11 @@ import {
   parseFlags,
   parseLaunchArgs,
   parseHarnessLaunchArgs,
-} from "../src/lib/cli.js";
+} from "../src/lib/cli/cli.js";
 import { fakeTool, runCn, tempDir } from "./helpers.js";
 import { modelsFor } from "../src/lib/catalog.js";
-import { which } from "../src/lib/launch.js";
-import { writeCodexCatalog } from "../src/lib/pickers.js";
+import { which } from "../src/lib/cli/launch.js";
+import { writeCodexCatalog } from "../src/lib/harnesses/pickers.js";
 
 function setup(extraEnv = {}) {
   const bin = tempDir("cn-bin-");

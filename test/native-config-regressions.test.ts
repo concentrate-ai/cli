@@ -1,19 +1,22 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
-import { parseConfig, setConfig } from "../src/lib/config-formats.js";
+import { parseConfig, setConfig } from "../src/lib/config/config-formats.js";
 import {
   applyNativeSetup,
   resetNativeSetup,
-} from "../src/lib/native-config-store.js";
-import { cursorConfigured, cursorDatabase } from "../src/lib/cursor-config.js";
-import { configureTool, resetTool } from "../src/lib/tool-config.js";
+} from "../src/lib/config/native-config-store.js";
+import {
+  cursorConfigured,
+  cursorDatabase,
+} from "../src/lib/config/cursor-config.js";
+import { configureTool, resetTool } from "../src/lib/harnesses/tool-config.js";
 import {
   readJson,
   writeKey,
   writePreferences,
   writeJson,
-} from "../src/lib/settings.js";
+} from "../src/lib/config/settings.js";
 import { tempDir, fakeTool } from "./helpers.js";
 import { summarize } from "../src/lib/catalog.js";
 

@@ -8,8 +8,8 @@ import {
   type ParseError,
 } from "jsonc-parser";
 import { isDeepStrictEqual } from "node:util";
-import { isRecord } from "./validation.js";
-import { CnError } from "./errors.js";
+import { isRecord } from "../validation.js";
+import { CnError } from "../errors.js";
 
 export type ConfigFormat = "json" | "toml" | "text";
 

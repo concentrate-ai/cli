@@ -1,4 +1,4 @@
-import type { Effort, Environment, ModelCost } from "./types.js";
+import type { Effort, Environment, ModelCost } from "../types.js";
 
 export interface ClaudeSettings {
   hooks?: {

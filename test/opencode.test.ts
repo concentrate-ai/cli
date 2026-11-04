@@ -3,7 +3,7 @@ import path from "node:path";
 import { test, expect } from "vitest";
 
 import { withStandalone } from "../src/lib/harnesses/opencode.js";
-import { opencodeConfig } from "../src/lib/pickers.js";
+import { opencodeConfig } from "../src/lib/harnesses/pickers.js";
 import { runCn, tempDir } from "./helpers.js";
 
 // Stand-in OpenCode. FAKE_OC=v2 makes --help advertise --standalone, as the real v2 does.

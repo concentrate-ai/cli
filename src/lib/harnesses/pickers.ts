@@ -4,13 +4,17 @@ import type {
   OpenCodeModel,
   PiModel,
 } from "./harness-config.js";
-import { EFFORTS, modelEfforts, defaultModelEffort } from "./model-metadata.js";
-import { isRecord, record } from "./validation.js";
-import type { Effort, Environment, Model } from "./types.js";
+import {
+  EFFORTS,
+  modelEfforts,
+  defaultModelEffort,
+} from "../model-metadata.js";
+import { isRecord, record } from "../validation.js";
+import type { Effort, Environment, Model } from "../types.js";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
-import { CnError } from "./errors.js";
+import { CnError } from "../errors.js";
 
 const CLAUDE_PREFERRED = [
   "claude-sonnet-4-6",

@@ -13,9 +13,9 @@ import {
   needsSetup,
   environmentKey,
   configDir,
-} from "../src/lib/settings.js";
+} from "../src/lib/config/settings.js";
 import { tempDir } from "./helpers.js";
-import { maskKey } from "../src/lib/commands.js";
+import { maskKey } from "../src/lib/cli/commands.js";
 import { homedir } from "node:os";
 
 const envFor = (dir, extra = {}) => ({ CN_CONFIG_HOME: dir, ...extra });

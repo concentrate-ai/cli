@@ -9,9 +9,9 @@ import {
   summarize,
   validateKey,
 } from "../src/lib/catalog.js";
-import { opencodeConfig, piConfig } from "../src/lib/pickers.js";
+import { opencodeConfig, piConfig } from "../src/lib/harnesses/pickers.js";
 import { tempDir } from "./helpers.js";
-import { writeJson } from "../src/lib/settings.js";
+import { writeJson } from "../src/lib/config/settings.js";
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status });

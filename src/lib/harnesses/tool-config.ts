@@ -3,14 +3,14 @@ import {
   resetCursor,
   cursorConfigured,
   refreshCursorKey,
-} from "./cursor-config.js";
+} from "../config/cursor-config.js";
 import {
   appHeaders,
   codexHeaderConfig,
   configDocument,
   openCodeHeaders,
 } from "./app-headers.js";
-import { record } from "./validation.js";
+import { record } from "../validation.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,16 +20,16 @@ import {
   fetchCatalog,
   modelsFor,
   routingModelId,
-} from "./catalog.js";
+} from "../catalog.js";
 import {
   permanentClaudePlugin,
   PERMANENT_CLAUDE_PLUGIN,
-} from "./claude-permanent.js";
-import { CnError } from "./errors.js";
-import { which } from "./executables.js";
-import { getHarness } from "./harnesses/registry.js";
-import { supportsStandalone } from "./harnesses/opencode.js";
-import { requireSupportedPi } from "./harnesses/pi.js";
+} from "../claude/claude-permanent.js";
+import { CnError } from "../errors.js";
+import { which } from "../executables.js";
+import { getHarness } from "./registry.js";
+import { supportsStandalone } from "./opencode.js";
+import { requireSupportedPi } from "./pi.js";
 import {
   CLAUDE_BLANKED,
   claudeSettings,
@@ -42,7 +42,7 @@ import {
   readJson,
   readPreferences,
   readStoredKey,
-} from "./settings.js";
+} from "../config/settings.js";
 import {
   applyNativeSetup,
   hasNativeSetup,
@@ -51,9 +51,9 @@ import {
   refreshNativeValue,
   withSetupLock,
   type ConfigPlan,
-} from "./native-config-store.js";
-import { defaultModelEffort } from "./model-metadata.js";
-import type { Environment, HarnessId, ConfigurableToolId } from "./types.js";
+} from "../config/native-config-store.js";
+import { defaultModelEffort } from "../model-metadata.js";
+import type { Environment, HarnessId, ConfigurableToolId } from "../types.js";
 
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const home = (env: Environment) => path.resolve(env.HOME || os.homedir());
@@ -133,7 +133,7 @@ export function toolConfigPaths(id: HarnessId, env: Environment = process.env) {
 }
 
 function helperScript(env: Environment) {
-  return `#!/bin/sh\n# Concentrate native configuration credential helper\nexec ${quote(process.execPath)} ${quote(fileURLToPath(new URL("../bin/cn.js", import.meta.url)))} --credential-helper ${quote(configDir(env))}\n`;
+  return `#!/bin/sh\n# Concentrate native configuration credential helper\nexec ${quote(process.execPath)} ${quote(fileURLToPath(new URL("../../bin/cn.js", import.meta.url)))} --credential-helper ${quote(configDir(env))}\n`;
 }
 
 const codexProviderTable = (key: string, env: Environment) => ({

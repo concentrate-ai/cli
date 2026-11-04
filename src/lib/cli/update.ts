@@ -2,19 +2,19 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { CnError, EXIT } from "./errors.js";
-import type { Environment } from "./types.js";
-import { errorMessage, record } from "./validation.js";
-import { listHarnesses } from "./harnesses/registry.js";
+import { CnError, EXIT } from "../errors.js";
+import type { Environment } from "../types.js";
+import { errorMessage, record } from "../validation.js";
+import { listHarnesses } from "../harnesses/registry.js";
 import {
   configDir,
   readStoredKeyOrNull,
   readJson,
   writeJson,
-} from "./settings.js";
-import { reconfigureTool, toolConfigured } from "./tool-config.js";
-import { interactive, select } from "./ui/widgets.js";
-import { version } from "./version.js";
+} from "../config/settings.js";
+import { reconfigureTool, toolConfigured } from "../harnesses/tool-config.js";
+import { interactive, select } from "../ui/widgets.js";
+import { version } from "../version.js";
 
 const RELEASES = "https://github.com/concentrateai-hq/cli/releases";
 const LATEST_API =

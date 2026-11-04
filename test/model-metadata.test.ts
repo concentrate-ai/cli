@@ -5,7 +5,7 @@ import {
   opencodeConfig,
   piConfig,
   writeCodexCatalog,
-} from "../src/lib/pickers.js";
+} from "../src/lib/harnesses/pickers.js";
 import { summarize } from "../src/lib/catalog.js";
 import { fakeTool, tempDir } from "./helpers.js";
 

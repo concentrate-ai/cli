@@ -3,14 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { prepareClaudeContext } from "./claude-context.js";
-import { CnError } from "./errors.js";
-import { isRecord } from "./validation.js";
+import { CnError } from "../errors.js";
+import { isRecord } from "../validation.js";
 import {
   readConfigFile,
   type ConfigChange,
   type ConfigPlan,
-} from "./native-config-store.js";
-import type { Environment, Model } from "./types.js";
+} from "../config/native-config-store.js";
+import type { Environment, Model } from "../types.js";
 
 export const PERMANENT_CLAUDE_PLUGIN = "cn-context@concentrate-cn";
 

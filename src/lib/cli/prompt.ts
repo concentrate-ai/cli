@@ -1,6 +1,6 @@
 import readline from "node:readline";
 
-import { CnError } from "./errors.js";
+import { CnError } from "../errors.js";
 
 let reader: readline.Interface | null = null;
 let lines: AsyncIterator<string, undefined> | null = null;

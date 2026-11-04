@@ -1,15 +1,15 @@
 import {
   configurableTool,
   listConfigurableTools,
-} from "./configurable-tools.js";
-import { CURSOR_NOTICE } from "./cursor-config.js";
+} from "../harnesses/configurable-tools.js";
+import { CURSOR_NOTICE } from "../config/cursor-config.js";
 import type {
   ConfigurableToolId,
   Environment,
   HarnessId,
   MenuItem,
   TerminalCapabilities,
-} from "./types.js";
+} from "../types.js";
 import {
   browseModels,
   runDoctor,
@@ -19,29 +19,29 @@ import {
   showConfig,
 } from "./commands.js";
 import { launch, which } from "./launch.js";
-import { getHarness, listHarnesses } from "./harnesses/registry.js";
-import { validateKey } from "./catalog.js";
+import { getHarness, listHarnesses } from "../harnesses/registry.js";
+import { validateKey } from "../catalog.js";
 import {
   needsSetup,
   readPreferences,
   resolveKeyOrNull,
   writeKey,
-} from "./settings.js";
-import { caps, paint } from "./ui/term.js";
-import { glyphs } from "./ui/theme.js";
-import { keyEntry } from "./ui/onboarding.js";
-import { select } from "./ui/widgets.js";
+} from "../config/settings.js";
+import { caps, paint } from "../ui/term.js";
+import { glyphs } from "../ui/theme.js";
+import { keyEntry } from "../ui/onboarding.js";
+import { select } from "../ui/widgets.js";
 import {
   configureTool,
   refreshConfiguredKey,
   resetTool,
   toolConfigured,
-} from "./tool-config.js";
-import { CnError } from "./errors.js";
-import { errorMessage } from "./validation.js";
-import { ledger } from "./ui/layout.js";
-import { clearScreen, openScreen } from "./ui/screen.js";
-import { chooseOpenCodeSession } from "./sessions.js";
+} from "../harnesses/tool-config.js";
+import { CnError } from "../errors.js";
+import { errorMessage } from "../validation.js";
+import { ledger } from "../ui/layout.js";
+import { clearScreen, openScreen } from "../ui/screen.js";
+import { chooseOpenCodeSession } from "../sessions.js";
 
 const MANAGE: MenuItem[] = [
   {

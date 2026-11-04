@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "vitest";
 import { summarize } from "../src/lib/catalog.js";
-import { writeJson, writePreferences } from "../src/lib/settings.js";
+import { writeJson, writePreferences } from "../src/lib/config/settings.js";
 import { fakeTool, tempDir } from "./helpers.js";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -72,7 +72,9 @@ test("source install produces a self-contained CLI and launches all four adapter
   expect(fs.existsSync(path.join(runtime, "node_modules"))).toBe(false);
   expect(fs.existsSync(path.join(runtime, "src"))).toBe(false);
   expect(
-    fs.existsSync(path.join(runtime, "dist/lib/claude-context/register.mjs")),
+    fs.existsSync(
+      path.join(runtime, "dist/lib/claude/claude-context/register.mjs"),
+    ),
   ).toBe(true);
   const cn = path.join(home, ".local/bin/cn");
   const run = (args) =>

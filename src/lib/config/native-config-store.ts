@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { CnError } from "./errors.js";
+import { CnError } from "../errors.js";
 import { parseConfig, setConfig, type ConfigFormat } from "./config-formats.js";
 import { readJson, writeJson } from "./settings.js";
-import { errorCode, isRecord } from "./validation.js";
+import { errorCode, isRecord } from "../validation.js";
 
 export interface ConfigChange {
   retainOnEditedFile?: boolean;

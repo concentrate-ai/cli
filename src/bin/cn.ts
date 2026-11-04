@@ -8,5 +8,5 @@ if (major < 22 || (major === 22 && minor < 13)) {
   process.exit(1);
 }
 
-const { main } = await import("../lib/cli.js");
+const { main } = await import("../lib/cli/cli.js");
 process.exitCode = await main();

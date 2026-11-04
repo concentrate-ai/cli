@@ -3,8 +3,8 @@ import {
   isNewer,
   refreshConfiguredTools,
   updateNotice,
-} from "../src/lib/update.js";
-import { writeJson } from "../src/lib/settings.js";
+} from "../src/lib/cli/update.js";
+import { writeJson } from "../src/lib/config/settings.js";
 import { version } from "../src/lib/version.js";
 import path from "node:path";
 import { tempDir } from "./helpers.js";

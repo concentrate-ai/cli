@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { parseConfig, type ConfigFormat } from "./config-formats.js";
-import { record } from "./validation.js";
-import type { Environment } from "./types.js";
+import { parseConfig, type ConfigFormat } from "../config/config-formats.js";
+import { record } from "../validation.js";
+import type { Environment } from "../types.js";
 
 // Header names are case-insensitive. Keep user-supplied values and spelling.
 function mergeHeaders(...sources: unknown[]) {

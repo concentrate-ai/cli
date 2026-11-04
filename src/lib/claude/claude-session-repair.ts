@@ -1,9 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { Environment } from "./types.js";
-import { configDir } from "./settings.js";
-import { record } from "./validation.js";
+import type { Environment } from "../types.js";
+import { configDir } from "../config/settings.js";
+import { record } from "../validation.js";
 
 const SESSION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 

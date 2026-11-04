@@ -1,9 +1,9 @@
-import type { Environment, Model } from "./types.js";
+import type { Environment, Model } from "../types.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { CnError } from "./errors.js";
+import { CnError } from "../errors.js";
 
 export function prepareClaudeContext({
   executable,

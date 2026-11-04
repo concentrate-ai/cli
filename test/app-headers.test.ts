@@ -5,7 +5,7 @@ import {
   appHeaders,
   codexHeaderConfig,
   openCodeHeaders,
-} from "../src/lib/app-headers.js";
+} from "../src/lib/harnesses/app-headers.js";
 import { tempDir } from "./helpers.js";
 import codex from "../src/lib/harnesses/codex.js";
 import pi from "../src/lib/harnesses/pi.js";

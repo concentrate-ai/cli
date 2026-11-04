@@ -1,14 +1,14 @@
 import {
   configurableTool,
   listConfigurableTools,
-} from "./configurable-tools.js";
+} from "../harnesses/configurable-tools.js";
 import type {
   Environment,
   Harness,
   HarnessId,
   Model,
   TerminalCapabilities,
-} from "./types.js";
+} from "../types.js";
 import {
   ensureModel,
   fetchCatalog,
@@ -17,7 +17,7 @@ import {
   routingModelId,
   probeHarness,
   validateKey,
-} from "./catalog.js";
+} from "../catalog.js";
 import {
   reconfigureTool,
   resetTool,
@@ -25,13 +25,13 @@ import {
   configureCodexProvider,
   toolConfigured,
   refreshConfiguredKey,
-} from "./tool-config.js";
+} from "../harnesses/tool-config.js";
 import fs from "node:fs";
 import path from "node:path";
-import { CnError } from "./errors.js";
-import { errorMessage } from "./validation.js";
-import { isApiKey } from "./safe.js";
-import { getHarness, listHarnesses } from "./harnesses/registry.js";
+import { CnError } from "../errors.js";
+import { errorMessage } from "../validation.js";
+import { isApiKey } from "../safe.js";
+import { getHarness, listHarnesses } from "../harnesses/registry.js";
 import { which } from "./launch.js";
 import { ask, askHidden } from "./prompt.js";
 import {
@@ -47,15 +47,15 @@ import {
   resolveKey,
   writeKey,
   writePreferences,
-} from "./settings.js";
-import { focusIn, header } from "./ui/brand.js";
-import { ledger, panel } from "./ui/layout.js";
-import { modelItem, modelLegend, modelRight } from "./ui/models.js";
-import { caps, pad, paint } from "./ui/term.js";
-import { glyphs } from "./ui/theme.js";
-import { interactive, password, select, spinner } from "./ui/widgets.js";
+} from "../config/settings.js";
+import { focusIn, header } from "../ui/brand.js";
+import { ledger, panel } from "../ui/layout.js";
+import { modelItem, modelLegend, modelRight } from "../ui/models.js";
+import { caps, pad, paint } from "../ui/term.js";
+import { glyphs } from "../ui/theme.js";
+import { interactive, password, select, spinner } from "../ui/widgets.js";
 import { updateNotice } from "./update.js";
-import { version } from "./version.js";
+import { version } from "../version.js";
 
 const SUGGESTED_MODELS = ["claude-sonnet-4-6", "deepseek-v4-1-flash"];
 

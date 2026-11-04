@@ -2,12 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { test, expect, onTestFinished } from "vitest";
-import { prepareClaudeContext } from "../dist/lib/claude-context.js";
+import { prepareClaudeContext } from "../dist/lib/claude/claude-context.js";
 import claude from "../dist/lib/harnesses/claude.js";
 import {
   outputLimit,
   supportedEffort,
-} from "../dist/lib/claude-context/register.mjs";
+} from "../dist/lib/claude/claude-context/register.mjs";
 
 const available = [
   { id: "custom-small", context: 128000 },

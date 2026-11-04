@@ -4,13 +4,13 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { spawnSync } from "node:child_process";
-import { CnError } from "./errors.js";
+import { CnError } from "../errors.js";
 import { configDir } from "./settings.js";
 import { withSetupLock } from "./native-config-store.js";
-import { which } from "./executables.js";
-import { isRecord } from "./validation.js";
+import { which } from "../executables.js";
+import { isRecord } from "../validation.js";
 import { readDatabaseRows, changeDatabaseRows } from "./sqlite-store.js";
-import type { Environment, Model } from "./types.js";
+import type { Environment, Model } from "../types.js";
 
 export const CURSOR_NOTICE =
   "Cursor desktop stores your Concentrate API key and sends requests through Cursor's servers before they reach Concentrate. Quit Cursor before Configure or Reset. Select models inside Cursor; Tab completions stay with Cursor.";

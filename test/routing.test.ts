@@ -13,8 +13,8 @@ import {
   readJson,
   writeJson,
   writePreferences,
-} from "../src/lib/settings.js";
-import { menuItems } from "../src/lib/launcher.js";
+} from "../src/lib/config/settings.js";
+import { menuItems } from "../src/lib/cli/launcher.js";
 import { CODEX_TEMPLATE, runCn, tempDir } from "./helpers.js";
 
 const provider = (slug, context = 1000) => ({

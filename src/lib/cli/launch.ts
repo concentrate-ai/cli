@@ -5,8 +5,8 @@ import type {
   LaunchOptions,
   Model,
   PreparedHarness,
-} from "./types.js";
-import { errorCode } from "./validation.js";
+} from "../types.js";
+import { errorCode } from "../validation.js";
 import os from "node:os";
 import { spawn } from "node:child_process";
 
@@ -15,16 +15,20 @@ import {
   fetchCatalog,
   modelsFor,
   routingModelId,
-} from "./catalog.js";
-import { CnError, EXIT } from "./errors.js";
-import { isOpenAiModel } from "./safe.js";
-import { getHarness } from "./harnesses/registry.js";
-import { readPreferences, resolveKey, writePreferences } from "./settings.js";
-import { ledger } from "./ui/layout.js";
-import { hasOption, resolveSessionArgs } from "./sessions.js";
+} from "../catalog.js";
+import { CnError, EXIT } from "../errors.js";
+import { isOpenAiModel } from "../safe.js";
+import { getHarness } from "../harnesses/registry.js";
+import {
+  readPreferences,
+  resolveKey,
+  writePreferences,
+} from "../config/settings.js";
+import { ledger } from "../ui/layout.js";
+import { hasOption, resolveSessionArgs } from "../sessions.js";
 
-export { which } from "./executables.js";
-import { which } from "./executables.js";
+export { which } from "../executables.js";
+import { which } from "../executables.js";
 
 function missingToolError(adapter: Harness) {
   return new CnError(

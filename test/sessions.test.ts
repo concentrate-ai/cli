@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
-import { parseHarnessLaunchArgs } from "../src/lib/cli.js";
+import { parseHarnessLaunchArgs } from "../src/lib/cli/cli.js";
 import { codexSessions, resolveSessionArgs } from "../src/lib/sessions.js";
 import { getHarness } from "../src/lib/harnesses/registry.js";
 import { runCn, tempDir } from "./helpers.js";

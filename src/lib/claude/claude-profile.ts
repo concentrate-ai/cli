@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { configDir } from "./settings.js";
-import type { Environment } from "./types.js";
+import { configDir } from "../config/settings.js";
+import type { Environment } from "../types.js";
 
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 

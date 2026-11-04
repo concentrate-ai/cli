@@ -1,5 +1,5 @@
-import { getHarness, isHarness, listHarnesses } from "./harnesses/registry.js";
-import type { ConfigurableToolId } from "./types.js";
+import { getHarness, isHarness, listHarnesses } from "./registry.js";
+import type { ConfigurableToolId } from "../types.js";
 
 export const configurableTool = (id: ConfigurableToolId) =>
   id === "cursor" ? ({ id, label: "Cursor desktop" } as const) : getHarness(id);
