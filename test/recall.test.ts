@@ -103,14 +103,15 @@ fs.writeFileSync(path.join(${JSON.stringify(r.claudeHome)}, "projects", "-some-e
   expect(r.configWritten()).toBe(false);
 });
 
-test("claude: staying on the launch model, or an unknown model, changes nothing", async () => {
-  for (const model of ["claude-sonnet-4-6", "some-unlisted-model"]) {
+test.each(["claude-sonnet-4-6", "some-unlisted-model"])(
+  "claude: staying on the launch model, or an unknown model, changes nothing: %s",
+  async (model) => {
     const r = rig();
     r.tool("claude", claudeWrites(r.claudeHome, model));
     await r.run("claude");
     expect(r.configWritten(), model).toBe(false);
-  }
-});
+  },
+);
 
 test("claude: a provider prefix is stripped and synthetic entries are skipped", async () => {
   const r = rig();
@@ -122,19 +123,22 @@ test("claude: a provider prefix is stripped and synthetic entries are skipped", 
   expect(r.saved("claude")).toBe("claude-opus-4-6");
 });
 
-test("nothing is remembered for scripted runs, one-off model flags, resumed sessions, or without a catalog", async () => {
-  const cases = [
-    ["not a terminal", { tty: false }],
-    ["model passed to the tool", { forwarded: ["--model", "claude-opus-4-6"] }],
-    ["model passed as --model=", { forwarded: ["--model=claude-opus-4-6"] }],
-    ["resumed session", { forwarded: ["--continue"] }],
-  ];
-  for (const [label, opts] of cases) {
+test.each([
+  ["not a terminal", { tty: false }],
+  ["model passed to the tool", { forwarded: ["--model", "claude-opus-4-6"] }],
+  ["model passed as --model=", { forwarded: ["--model=claude-opus-4-6"] }],
+  ["resumed session", { forwarded: ["--continue"] }],
+])(
+  "nothing is remembered for scripted runs, one-off model flags, resumed sessions, or without a catalog: %s",
+  async (label, opts) => {
     const r = rig();
     r.tool("claude", claudeWrites(r.claudeHome, "claude-opus-4-6"));
     await r.run("claude", opts);
     expect(r.configWritten(), label).toBe(false);
-  }
+  },
+);
+
+test("nothing is remembered for scripted runs, one-off model flags, resumed sessions, or without a catalog: no catalog", async () => {
   const offline = rig({ catalog: false });
   offline.tool("claude", claudeWrites(offline.claudeHome, "claude-opus-4-6"));
   await launch("claude", { tty: true }, { ...offline.env, CN_OFFLINE: "1" });
@@ -206,20 +210,20 @@ fs.writeFileSync(path.join(sessions, "--project--", "native-session.jsonl"), "sa
   expect(r.configWritten()).toBe(false);
 });
 
+const piTempDirsExcept = (known = new Set()) =>
+  fs
+    .readdirSync(os.tmpdir())
+    .filter((n) => n.startsWith("cn-pi-") && !known.has(n));
+
 test("pi: a failure while preparing removes the temporary directory", async () => {
   const r = rig();
   r.tool("pi", "");
   const invalid = path.join(r.bin, "invalid-agent");
   fs.writeFileSync(invalid, "not a directory");
   r.env.PI_CODING_AGENT_DIR = invalid;
-  const before = new Set(
-    fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith("cn-pi-")),
-  );
+  const before = new Set(piTempDirsExcept());
   await expect(r.run("pi")).rejects.toThrow();
-  const left = fs
-    .readdirSync(os.tmpdir())
-    .filter((n) => n.startsWith("cn-pi-") && !before.has(n));
-  expect(left).toStrictEqual([]);
+  expect(piTempDirsExcept(before)).toStrictEqual([]);
 });
 
 // Like the real Codex: a dated rollout file whose first line is a session_meta header.
@@ -283,8 +287,7 @@ test("codex: after the session ends, cn prints the command that resumes it throu
   } finally {
     console.error = original;
   }
-  expect(
-    lines.some((line) => line.includes("cn codex resume 01a1-resume-me")),
-    lines.join("\n"),
-  ).toBeTruthy();
+  expect(lines).toContainEqual(
+    expect.stringContaining("cn codex resume 01a1-resume-me"),
+  );
 });

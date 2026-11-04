@@ -131,10 +131,10 @@ test("Cursor Reset keeps later changes to settings, model lists, and credentials
   edit(f, CURSOR_USER_ROW, JSON.stringify(user));
   edit(f, CURSOR_KEY_ROW, "different-key");
   const result = resetCursor(f.env);
-  expect(result.preserved.includes("userAddedModels")).toBeTruthy();
-  expect(result.preserved.some((v) => v.includes("API key"))).toBeTruthy();
+  expect(result.preserved).toContain("userAddedModels");
+  expect(result.preserved).toContainEqual(expect.stringContaining("API key"));
   expect(userOf(f).theme).toBe("light");
-  expect(userOf(f).aiSettings.userAddedModels.includes("later")).toBeTruthy();
+  expect(userOf(f).aiSettings.userAddedModels).toContain("later");
   expect(rowsOf(f).get(CURSOR_KEY_ROW)).toBe("different-key");
   expect(cursorConfigured(f.env)).toBe(false);
   // Explicit Configure after Reset starts a new baseline using the preserved edits.
@@ -149,7 +149,7 @@ test("Cursor Reset preserves an encrypted credential whose ownership cannot be v
   edit(f, CURSOR_KEY_ROW, null);
   edit(f, CURSOR_SECRET_ROW, "new-encrypted-value");
   const result = resetCursor(f.env);
-  expect(result.preserved.some((v) => v.includes("encrypted"))).toBeTruthy();
+  expect(result.preserved).toContainEqual(expect.stringContaining("encrypted"));
   expect(rowsOf(f).get(CURSOR_SECRET_ROW)).toBe("new-encrypted-value");
 });
 
@@ -212,35 +212,44 @@ test("Cursor rejects running processes, malformed settings, symlinks and empty c
   );
 });
 
-test("Cursor CLI Configure/Reset and global Reset/Logout include desktop credentials", async () => {
-  for (const operation of ["named", "reset", "logout"]) {
-    const f = fixture();
-    writeKey("sk-saved", f.env);
-    writeJson(path.join(f.env.CN_CONFIG_HOME, "catalog.json"), {
-      version: 6,
-      fetched_at: Date.now(),
-      models,
-    });
-    await configureTool("cursor", f.env);
-    expect(toolConfigured("cursor", f.env)).toBe(true);
-    if (operation === "named") {
-      const result = runCn(["reset", "cursor"], { env: f.env });
-      expect(result.status, result.stderr).toBe(0);
-      const configured = runCn(["configure", "cursor"], { env: f.env });
-      expect(configured.status, configured.stderr).toBe(0);
-      expect(configured.stdout).toMatch(/Cursor's servers/);
-      resetTool("cursor", f.env);
-    } else {
-      const result = runCn(
-        operation === "reset" ? ["reset", "--yes"] : ["logout"],
-        { env: f.env },
-      );
-      expect(result.status, result.stderr).toBe(0);
-    }
+const configuredWithSavedKey = async () => {
+  const f = fixture();
+  writeKey("sk-saved", f.env);
+  writeJson(path.join(f.env.CN_CONFIG_HOME, "catalog.json"), {
+    version: 6,
+    fetched_at: Date.now(),
+    models,
+  });
+  await configureTool("cursor", f.env);
+  expect(toolConfigured("cursor", f.env)).toBe(true);
+  return f;
+};
+
+test("Cursor CLI Configure/Reset and global Reset/Logout include desktop credentials: named", async () => {
+  const f = await configuredWithSavedKey();
+  const result = runCn(["reset", "cursor"], { env: f.env });
+  expect(result.status, result.stderr).toBe(0);
+  const configured = runCn(["configure", "cursor"], { env: f.env });
+  expect(configured.status, configured.stderr).toBe(0);
+  expect(configured.stdout).toMatch(/Cursor's servers/);
+  resetTool("cursor", f.env);
+  expect(userOf(f)).toStrictEqual(initial);
+  expect(rowsOf(f).get(CURSOR_SECRET_ROW)).toBe("original-encrypted-key");
+});
+
+test.each([
+  ["reset", ["reset", "--yes"]],
+  ["logout", ["logout"]],
+])(
+  "Cursor CLI Configure/Reset and global Reset/Logout include desktop credentials: %s",
+  async (_operation, args) => {
+    const f = await configuredWithSavedKey();
+    const result = runCn(args, { env: f.env });
+    expect(result.status, result.stderr).toBe(0);
     expect(userOf(f)).toStrictEqual(initial);
     expect(rowsOf(f).get(CURSOR_SECRET_ROW)).toBe("original-encrypted-key");
-  }
-});
+  },
+);
 
 test("Cursor SQL values with quotes round-trip without executing their contents", () => {
   const f = fixture();

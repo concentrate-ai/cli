@@ -42,50 +42,55 @@ const models = [
   },
 ];
 
-for (const modern of [false, true]) {
-  test(`OpenCode ${modern ? "v2" : "v1"} receives distinct model limits and supported capabilities`, () => {
-    const config = opencodeConfig("https://example.test", "small", models, {
-      modern,
-    });
-    const catalog = (config.providers ?? config.provider).concentrate.models;
-    expect(catalog.small.limit).toStrictEqual({ context: 32768, output: 4096 });
-    expect(catalog.large.limit).toStrictEqual({
-      context: 400000,
-      output: 64000,
-    });
-    expect(catalog.unknown.limit).toBe(undefined);
-    if (modern) {
-      expect(catalog.small.capabilities.input).toStrictEqual(["text"]);
-      expect(catalog.large.capabilities.input).toStrictEqual(["text", "image"]);
-      expect(catalog.small.capabilities.reasoning.supported).toBe(false);
-      expect(catalog.large.capabilities.reasoning).toStrictEqual({
-        supported: true,
-        effort: ["low", "medium", "max"],
-        toggle: true,
-      });
-      expect(catalog.large.variants.map((entry) => entry.id)).toStrictEqual([
-        "none",
-        "low",
-        "medium",
-        "max",
-      ]);
-      expect(catalog.large.variants.at(-1).body.reasoning.effort).toBe("max");
-      expect(catalog.unknown.capabilities.reasoning).toBe(undefined);
-      expect(catalog.large.modalities).toBe(undefined);
-    } else {
-      expect(catalog.small.reasoning).toBe(false);
-      expect(catalog.large.modalities.input).toStrictEqual(["text", "image"]);
-      expect(Object.keys(catalog.large.variants)).toStrictEqual([
-        "none",
-        "low",
-        "medium",
-        "max",
-      ]);
-      expect(catalog.large.variants.max.reasoningEffort).toBe("max");
-      expect(catalog.unknown.reasoning).toBe(undefined);
-    }
+const expectLimits = (catalog) => {
+  expect(catalog.small.limit).toStrictEqual({ context: 32768, output: 4096 });
+  expect(catalog.large.limit).toStrictEqual({
+    context: 400000,
+    output: 64000,
   });
-}
+  expect(catalog.unknown.limit).toBe(undefined);
+};
+
+test("OpenCode v1 receives distinct model limits and supported capabilities", () => {
+  const catalog = opencodeConfig("https://example.test", "small", models, {
+    modern: false,
+  }).provider.concentrate.models;
+  expectLimits(catalog);
+  expect(catalog.small.reasoning).toBe(false);
+  expect(catalog.large.modalities.input).toStrictEqual(["text", "image"]);
+  expect(Object.keys(catalog.large.variants)).toStrictEqual([
+    "none",
+    "low",
+    "medium",
+    "max",
+  ]);
+  expect(catalog.large.variants.max.reasoningEffort).toBe("max");
+  expect(catalog.unknown.reasoning).toBe(undefined);
+});
+
+test("OpenCode v2 receives distinct model limits and supported capabilities", () => {
+  const catalog = opencodeConfig("https://example.test", "small", models, {
+    modern: true,
+  }).providers.concentrate.models;
+  expectLimits(catalog);
+  expect(catalog.small.capabilities.input).toStrictEqual(["text"]);
+  expect(catalog.large.capabilities.input).toStrictEqual(["text", "image"]);
+  expect(catalog.small.capabilities.reasoning.supported).toBe(false);
+  expect(catalog.large.capabilities.reasoning).toStrictEqual({
+    supported: true,
+    effort: ["low", "medium", "max"],
+    toggle: true,
+  });
+  expect(catalog.large.variants).toMatchObject([
+    { id: "none" },
+    { id: "low" },
+    { id: "medium" },
+    { id: "max" },
+  ]);
+  expect(catalog.large.variants.at(-1).body.reasoning.effort).toBe("max");
+  expect(catalog.unknown.capabilities.reasoning).toBe(undefined);
+  expect(catalog.large.modalities).toBe(undefined);
+});
 
 test("Pi limits and thinking choices follow each model without inventing missing metadata", () => {
   const [small, large, unknown] = piConfig("https://example.test", models)
@@ -136,9 +141,12 @@ test("Codex catalog advertises actual per-model reasoning choices and defaults",
   );
   expect(large.use_responses_lite).toBe(false);
   expect(unknown.context_window).toBe(272000);
-  expect(
-    large.supported_reasoning_levels.map((level) => level.effort),
-  ).toStrictEqual(["none", "low", "medium", "max"]);
+  expect(large.supported_reasoning_levels).toMatchObject([
+    { effort: "none" },
+    { effort: "low" },
+    { effort: "medium" },
+    { effort: "max" },
+  ]);
   expect(large.default_reasoning_level).toBe("medium");
   expect(large.input_modalities).toStrictEqual(["text", "image"]);
   expect(unknown.supported_reasoning_levels).toStrictEqual([]);

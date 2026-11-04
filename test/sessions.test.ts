@@ -60,25 +60,36 @@ function pi(
   );
 }
 
-test("resume and continue have consistent aliases for every CLI; -- preserves native input", () => {
-  const expected = {
-    claude: [["--resume", "id"], ["--resume"], ["--continue"]],
-    codex: [["resume", "id"], ["resume"], ["resume", "--last"]],
-    opencode: [["--session", "id"], null, ["--continue"]],
-    pi: [["--session", "id"], ["--resume"], ["--continue"]],
-  };
-  for (const [target, cases] of Object.entries(expected)) {
-    for (const [index, args] of [
-      ["resume", "id"],
-      ["resume"],
-      ["continue"],
-    ].entries())
-      if (cases[index] === null)
-        expect(() => parseHarnessLaunchArgs(target, args)).toThrow(/--session/);
-      else
-        expect(parseHarnessLaunchArgs(target, args).forwarded).toStrictEqual(
-          cases[index],
-        );
+test.each([
+  ["claude", ["resume", "id"], ["--resume", "id"]],
+  ["claude", ["resume"], ["--resume"]],
+  ["claude", ["continue"], ["--continue"]],
+  ["codex", ["resume", "id"], ["resume", "id"]],
+  ["codex", ["resume"], ["resume"]],
+  ["codex", ["continue"], ["resume", "--last"]],
+  ["opencode", ["resume", "id"], ["--session", "id"]],
+  ["opencode", ["continue"], ["--continue"]],
+  ["pi", ["resume", "id"], ["--session", "id"]],
+  ["pi", ["resume"], ["--resume"]],
+  ["pi", ["continue"], ["--continue"]],
+])(
+  "resume and continue have consistent aliases for every CLI; -- preserves native input: %s %j",
+  (target, args, forwarded) => {
+    expect(parseHarnessLaunchArgs(target, args).forwarded).toStrictEqual(
+      forwarded,
+    );
+  },
+);
+
+test("resume and continue have consistent aliases for every CLI; -- preserves native input: opencode resume without an id", () => {
+  expect(() => parseHarnessLaunchArgs("opencode", ["resume"])).toThrow(
+    /--session/,
+  );
+});
+
+test.each(["claude", "codex", "opencode", "pi"])(
+  "resume and continue have consistent aliases for every CLI; -- preserves native input: %s -- and --model",
+  (target) => {
     expect(
       parseHarnessLaunchArgs(target, ["--", "continue"]).forwarded,
     ).toStrictEqual(["continue"]);
@@ -86,8 +97,8 @@ test("resume and continue have consistent aliases for every CLI; -- preserves na
       parseHarnessLaunchArgs(target, ["--model", "chosen", "resume", "id"])
         .model,
     ).toBe("chosen");
-  }
-});
+  },
+);
 
 test("Codex discovery includes subscription/provider sessions and restricts continue to the current project", async () => {
   const { env, root } = rig();
@@ -99,9 +110,9 @@ test("Codex discovery includes subscription/provider sessions and restricts cont
     "invalid",
   );
   fs.symlinkSync(original, path.join(path.dirname(original), "link.jsonl"));
-  expect(codexSessions(env).map((s) => s.id)).toStrictEqual([
-    "subscription",
-    "concentrate",
+  expect(codexSessions(env)).toMatchObject([
+    { id: "subscription" },
+    { id: "concentrate" },
   ]);
   const before = fs.readFileSync(original, "utf8");
   expect(
@@ -137,31 +148,32 @@ test("Codex resume fails when there are no local sessions", async () => {
   ).rejects.toThrow(/Choose a session/);
 });
 
-test("Pi handles resume and session paths itself", async () => {
+test.each([
+  [["--continue"]],
+  [["--resume"]],
+  [["--session", "partial-id"]],
+  [["--session", "/some/old/session.jsonl"]],
+  [["--session-dir", "/custom", "--resume"]],
+])("Pi handles resume and session paths itself: %j", async (args) => {
   const { env } = rig();
-  for (const args of [
-    ["--continue"],
-    ["--resume"],
-    ["--session", "partial-id"],
-    ["--session", "/some/old/session.jsonl"],
-    ["--session-dir", "/custom", "--resume"],
-  ])
-    expect(await resolveSessionArgs("pi", "unused", args, env)).toStrictEqual(
-      args,
-    );
+  expect(await resolveSessionArgs("pi", "unused", args, env)).toStrictEqual(
+    args,
+  );
 });
 
-test("OpenCode explicit native session arguments do not invoke a cn picker", async () => {
-  const { env } = rig();
-  for (const args of [
-    [],
-    ["--session", "ses_existing"],
-    ["run", "--session", "ses_existing", "hello"],
-  ])
+test.each([
+  [[]],
+  [["--session", "ses_existing"]],
+  [["run", "--session", "ses_existing", "hello"]],
+])(
+  "OpenCode explicit native session arguments do not invoke a cn picker: %j",
+  async (args) => {
+    const { env } = rig();
     expect(
       await resolveSessionArgs("opencode", "nonexistent", args, env),
     ).toStrictEqual(args);
-});
+  },
+);
 
 function openCodeRig() {
   const { root, env } = rig();
@@ -196,9 +208,8 @@ test("OpenCode resume validates the session and switches its durable provider be
   );
   expect(result.status, result.stderr).toBe(0);
   const calls = rig.calls();
-  const switchCall = calls.find((call) => call.args[0] === "api");
-  expect(switchCall).toBeTruthy();
-  expect(JSON.parse(switchCall.args.at(-1))).toStrictEqual({
+  expect(calls[0].args[0]).toBe("api");
+  expect(JSON.parse(calls[0].args.at(-1))).toStrictEqual({
     model: { providerID: "concentrate", id: "chosen" },
   });
   expect(calls.at(-1).args).toStrictEqual([
@@ -208,9 +219,9 @@ test("OpenCode resume validates the session and switches its durable provider be
   ]);
   expect(JSON.parse(calls.at(-1).config).model).toBe("concentrate/chosen");
   expect(
-    !JSON.stringify(calls).includes("sk-test"),
+    JSON.stringify(calls),
     "key must not be placed in argv or inline config",
-  ).toBeTruthy();
+  ).not.toContain("sk-test");
 });
 
 test("OpenCode stops on a missing session or failed provider switch instead of using the previous connection", () => {
@@ -220,25 +231,28 @@ test("OpenCode stops on a missing session or failed provider switch instead of u
   });
   expect(missing.status).toBe(1);
   expect(missing.stderr).toMatch(/Could not switch/);
-  expect(
-    !rig.calls().some((call) => call.args[0] === "--standalone"),
-  ).toBeTruthy();
+  const afterMissing = rig.calls();
+  expect(afterMissing).toHaveLength(1);
+  expect(afterMissing[0].args[0]).toBe("api");
   const failed = runCn(["opencode", "continue"], {
     env: { ...rig.env, FAIL_SWITCH: "1" },
   });
   expect(failed.status).toBe(1);
   expect(failed.stderr).toMatch(/Could not switch/);
-  expect(
-    !rig.calls().some((call) => call.args[0] === "--standalone"),
-  ).toBeTruthy();
+  const afterFailed = rig.calls();
+  expect(afterFailed).toHaveLength(3);
+  expect(afterFailed[0].args[0]).toBe("api");
+  expect(afterFailed[1].args[0]).toBe("session");
+  expect(afterFailed[2].args[0]).toBe("api");
 });
 
-test("OpenCode keeps --session after a subcommand and creates new named sessions", () => {
-  const rig = openCodeRig();
-  for (const args of [
-    ["--", "run", "--session", "ses_existing", "hello"],
-    ["--", "run", "--continue", "hello"],
-  ]) {
+test.each([
+  [["--", "run", "--session", "ses_existing", "hello"]],
+  [["--", "run", "--continue", "hello"]],
+])(
+  "OpenCode keeps --session after a subcommand and creates new named sessions: %j",
+  (args) => {
+    const rig = openCodeRig();
     const result = runCn(["opencode", ...args], { env: rig.env });
     expect(result.status, result.stderr).toBe(0);
     expect(rig.calls().at(-1).args).toStrictEqual([
@@ -248,7 +262,11 @@ test("OpenCode keeps --session after a subcommand and creates new named sessions
       "ses_existing",
       "hello",
     ]);
-  }
+  },
+);
+
+test("OpenCode keeps --session after a subcommand and creates new named sessions: new session", () => {
+  const rig = openCodeRig();
   // `--session <new id>` creates the session: a 404 from the switch is not an error.
   const created = runCn(["opencode", "--", "--session", "ses_new"], {
     env: rig.env,
@@ -276,15 +294,19 @@ test("Codex continue and the picker skip subagent and scripted sessions unless a
     0,
   );
   save(file("scripted"), meta("scripted", "exec"), 1000);
-  expect(codexSessions(env).map((s) => s.id)).toStrictEqual(["interactive"]);
+  expect(codexSessions(env)).toMatchObject([{ id: "interactive" }]);
   expect(
     await resolveSessionArgs("codex", "unused", ["resume", "--last"], env),
   ).toStrictEqual(["resume", "interactive"]);
   expect(
     codexSessions(env, process.cwd(), {
       includeNonInteractive: true,
-    }).map((s) => s.id),
-  ).toStrictEqual(["subagent", "scripted", "interactive"]);
+    }),
+  ).toMatchObject([
+    { id: "subagent" },
+    { id: "scripted" },
+    { id: "interactive" },
+  ]);
   expect(
     await resolveSessionArgs(
       "codex",
@@ -306,20 +328,25 @@ test("a session whose header line is larger than 64 KiB is still found", () => {
       instructions: "x".repeat(200000),
     },
   });
-  expect(codexSessions(env).map((s) => s.id)).toStrictEqual(["big"]);
+  expect(codexSessions(env)).toMatchObject([{ id: "big" }]);
 });
 
-test("codex exec resume --last continues scripted runs and never forwards the picker-only flag", async () => {
-  const { env } = rig();
-  const file = (id) =>
-    path.join(env.CODEX_HOME, "sessions", "2026", "10", "27", `${id}.jsonl`);
-  const meta = (id, source) => ({
-    type: "session_meta",
-    payload: { id, cwd: process.cwd(), source },
-  });
-  save(file("scripted"), meta("scripted", "exec"), 0);
-  save(file("subagent"), meta("subagent", { subagent: { other: "x" } }), 10000);
-  for (const extra of [[], ["--include-non-interactive"]])
+test.each([[[]], [["--include-non-interactive"]]])(
+  "codex exec resume --last continues scripted runs and never forwards the picker-only flag: %j",
+  async (extra) => {
+    const { env } = rig();
+    const file = (id) =>
+      path.join(env.CODEX_HOME, "sessions", "2026", "10", "27", `${id}.jsonl`);
+    const meta = (id, source) => ({
+      type: "session_meta",
+      payload: { id, cwd: process.cwd(), source },
+    });
+    save(file("scripted"), meta("scripted", "exec"), 0);
+    save(
+      file("subagent"),
+      meta("subagent", { subagent: { other: "x" } }),
+      10000,
+    );
     expect(
       await resolveSessionArgs(
         "codex",
@@ -328,4 +355,5 @@ test("codex exec resume --last continues scripted runs and never forwards the pi
         env,
       ),
     ).toStrictEqual(["exec", "resume", "scripted", "go"]);
-});
+  },
+);

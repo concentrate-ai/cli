@@ -75,34 +75,53 @@ test("v1 resume explicitly selects the Concentrate model instead of the session'
   ]);
 });
 
-test("both versions get native provider config, with the key by reference only", () => {
-  for (const version of ["v1", "v2"]) {
+const endpoint = {
+  baseURL: "https://api.concentrate.ai/v1",
+  apiKey: "{env:CONCENTRATE_API_KEY}",
+};
+const selected = { "claude-opus-4-6": expect.any(Object) };
+
+test.each([
+  [
+    "v1",
+    {
+      provider: {
+        concentrate: {
+          npm: "@ai-sdk/openai",
+          options: endpoint,
+          models: selected,
+        },
+      },
+    },
+  ],
+  [
+    "v2",
+    {
+      providers: {
+        concentrate: {
+          package: "@opencode/ai/providers/openai",
+          settings: endpoint,
+          models: selected,
+        },
+      },
+    },
+  ],
+])(
+  "both versions get native provider config, with the key by reference only: %s",
+  (version, expected) => {
     const { env, seen } = rig(version);
     runCn(["opencode", "--model", "claude-opus-4-6"], { env });
     const { config, key } = seen();
-    const parsed = JSON.parse(config);
-    expect(parsed.model).toBe("concentrate/claude-opus-4-6");
-    const provider = (parsed.providers ?? parsed.provider).concentrate;
-    expect(provider.package ?? provider.npm).toBe(
-      version === "v2" ? "@opencode/ai/providers/openai" : "@ai-sdk/openai",
-    );
-    expect((provider.settings ?? provider.options).baseURL).toBe(
-      "https://api.concentrate.ai/v1",
-    );
-    expect((provider.settings ?? provider.options).apiKey).toBe(
-      "{env:CONCENTRATE_API_KEY}",
-    );
-    expect(
-      provider.models["claude-opus-4-6"],
-      "selected model is listed",
-    ).toBeTruthy();
+    expect(JSON.parse(config)).toMatchObject({
+      model: "concentrate/claude-opus-4-6",
+      ...expected,
+    });
     expect(key).toBe("sk-test");
-    expect(
-      !config.includes("sk-test"),
-      "the key is not written into the config",
-    ).toBeTruthy();
-  }
-});
+    expect(config, "the key is not written into the config").not.toContain(
+      "sk-test",
+    );
+  },
+);
 
 test("the config uses no v1-only model fields that v2 would warn about", () => {
   const config = opencodeConfig(

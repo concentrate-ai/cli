@@ -82,45 +82,53 @@ test("Reset keeps the restore record when the user deleted a configured file", (
   fs.rmSync(file);
   const result = resetNativeSetup(state, [file]);
   expect(result.preserved).toStrictEqual([file]);
-  expect(fs.existsSync(state)).toBeTruthy();
+  expect(fs.existsSync(state)).toBe(true);
   expect(readJson(state).files[0].original).toBe('{ "theme": "dark" }\n');
 });
 
-test("a failed Configure keeps the credential helper executable", (t) => {
-  if (process.getuid?.() === 0) return t.skip("root ignores directory modes");
-  const dir = tempDir();
-  const helper = path.join(dir, "state", "credential-helper");
-  const file = path.join(dir, "locked", "settings.json");
-  const state = path.join(dir, "state", "restore.json");
-  fs.mkdirSync(path.dirname(file));
-  const plans = (value) => [
-    {
-      file: helper,
-      format: "text",
-      mode: 0o700,
-      changes: [{ key: ["content"], value }],
-    },
-    plan(file, [[["model"], value]]),
-  ];
-  applyNativeSetup(state, plans("one"));
-  fs.chmodSync(path.dirname(file), 0o500);
-  try {
-    expect(() => applyNativeSetup(state, plans("two"))).toThrow();
-  } finally {
-    fs.chmodSync(path.dirname(file), 0o700);
-  }
-  expect(fs.statSync(helper).mode & 0o777).toBe(0o700);
-  expect(fs.readFileSync(helper, "utf8")).toBe("one");
-});
+test.skipIf(process.getuid?.() === 0)(
+  "a failed Configure keeps the credential helper executable",
+  () => {
+    const dir = tempDir();
+    const helper = path.join(dir, "state", "credential-helper");
+    const file = path.join(dir, "locked", "settings.json");
+    const state = path.join(dir, "state", "restore.json");
+    fs.mkdirSync(path.dirname(file));
+    const plans = (value) => [
+      {
+        file: helper,
+        format: "text",
+        mode: 0o700,
+        changes: [{ key: ["content"], value }],
+      },
+      plan(file, [[["model"], value]]),
+    ];
+    applyNativeSetup(state, plans("one"));
+    fs.chmodSync(path.dirname(file), 0o500);
+    try {
+      expect(() => applyNativeSetup(state, plans("two"))).toThrow();
+    } finally {
+      fs.chmodSync(path.dirname(file), 0o700);
+    }
+    expect(fs.statSync(helper).mode & 0o777).toBe(0o700);
+    expect(fs.readFileSync(helper, "utf8")).toBe("one");
+  },
+);
 
-test("whitespace-only and comment-only JSON files are valid empty configurations", () => {
-  for (const text of ["", "\n", "// note\n", "/* a */\n"]) {
+test.each([
+  ["", "{"],
+  ["\n", "{"],
+  ["// note\n", "// note"],
+  ["/* a */\n", "/* a */"],
+])(
+  "whitespace-only and comment-only JSON files are valid empty configurations: %j",
+  (text, prefix) => {
     expect(parseConfig(text, "json")).toStrictEqual({});
     const written = setConfig(text, "json", ["model"], "x");
     expect(parseConfig(written, "json")).toStrictEqual({ model: "x" });
-    expect(written.startsWith(text.trim() ? text.trimEnd() : "{")).toBeTruthy();
-  }
-});
+    expect(written.startsWith(prefix)).toBe(true);
+  },
+);
 
 function toolFixture() {
   const dir = tempDir("cn-reg-");
@@ -177,7 +185,7 @@ test("Logout/Reset removes OpenCode's key file even if an unrelated setting was 
     "opencode",
     "api-key",
   );
-  expect(fs.existsSync(keyFile)).toBeTruthy();
+  expect(fs.existsSync(keyFile)).toBe(true);
   const edited = JSON.parse(fs.readFileSync(settings, "utf8"));
   edited.theme = "tokyo";
   fs.writeFileSync(settings, JSON.stringify(edited));

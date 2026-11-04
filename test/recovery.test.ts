@@ -25,30 +25,32 @@ function home() {
 
 const credentials = (env) => path.join(env.CN_CONFIG_HOME, "credentials.json");
 
-test("a damaged saved key can be replaced with cn key and cn setup", () => {
-  for (const [name, setup] of [
-    [
-      "not a valid key",
-      (f) => fs.writeFileSync(f, '{"api_key":"has spaces"}', { mode: 0o600 }),
-    ],
-    [
-      "readable by others",
-      (f) => fs.writeFileSync(f, '{"api_key":"sk-old"}', { mode: 0o644 }),
-    ],
-    ["not JSON", (f) => fs.writeFileSync(f, "garbage", { mode: 0o600 })],
-  ]) {
-    for (const command of ["key", "setup"]) {
-      const { env } = home();
-      setup(credentials(env));
-      const result = runCn([command, "--no-verify"], {
-        env,
-        input: "sk-brand-new\n",
-      });
-      expect(result.status, `${command} (${name}): ${result.stderr}`).toBe(0);
-      expect(readStoredKey(env), `${command} (${name})`).toBe("sk-brand-new");
-    }
-  }
-});
+const notValid = (f) =>
+  fs.writeFileSync(f, '{"api_key":"has spaces"}', { mode: 0o600 });
+const readableByOthers = (f) =>
+  fs.writeFileSync(f, '{"api_key":"sk-old"}', { mode: 0o644 });
+const notJson = (f) => fs.writeFileSync(f, "garbage", { mode: 0o600 });
+
+test.each([
+  ["not a valid key", "key", notValid],
+  ["not a valid key", "setup", notValid],
+  ["readable by others", "key", readableByOthers],
+  ["readable by others", "setup", readableByOthers],
+  ["not JSON", "key", notJson],
+  ["not JSON", "setup", notJson],
+])(
+  "a damaged saved key can be replaced with cn key and cn setup: %s, cn %s",
+  (name, command, setup) => {
+    const { env } = home();
+    setup(credentials(env));
+    const result = runCn([command, "--no-verify"], {
+      env,
+      input: "sk-brand-new\n",
+    });
+    expect(result.status, `${command} (${name}): ${result.stderr}`).toBe(0);
+    expect(readStoredKey(env), `${command} (${name})`).toBe("sk-brand-new");
+  },
+);
 
 test("the first-run check treats a damaged key as missing instead of crashing", () => {
   const { bin, env } = home();

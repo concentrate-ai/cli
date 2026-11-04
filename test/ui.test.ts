@@ -26,40 +26,47 @@ import {
 } from "../src/lib/ui/widgets.js";
 import { openScreen, fullScreenActive } from "../src/lib/ui/screen.js";
 
-test("fullscreen menus fit resized terminals and keep the focused action visible", () => {
-  const items = Array.from({ length: 60 }, (_, i) => ({
-    value: `item-${i}`,
-    label: `action-${i}`,
-    note: "Tool settings",
-  }));
-  const state = createSelect(items, { initial: "item-42", filterable: true });
-  for (const [width, height] of [
-    [39, 12],
-    [69, 23],
-    [99, 39],
-    [159, 49],
-  ]) {
-    for (const color of [0, 24]) {
-      const frame = renderWorkspace(
-        state,
-        {
-          title: "Settings",
-          detail: () => [
-            "Configure this tool to use Concentrate for direct launches.",
-          ],
-        },
-        { tty: true, color, unicode: true, width, motion: false },
-        height,
-      );
-      expect(frame.length).toBe(height);
-      expect(frame.every((line) => visibleWidth(line) <= width)).toBeTruthy();
-      const text = strip(frame.join("\n"));
-      expect(text).toMatch(/action-42/);
-      expect(text).toMatch(/Concentrate/);
-      expect(text).toMatch(/back/);
-    }
-  }
-});
+const widths = (lines) => lines.map(visibleWidth);
+const widest = (lines) => Math.max(...widths(lines));
+const chars = (text) => [...text].map((char) => ({ name: "char", char }));
+
+test.each([
+  [39, 12, 0],
+  [39, 12, 24],
+  [69, 23, 0],
+  [69, 23, 24],
+  [99, 39, 0],
+  [99, 39, 24],
+  [159, 49, 0],
+  [159, 49, 24],
+])(
+  "fullscreen menus fit resized terminals and keep the focused action visible: %ix%i color %i",
+  (width, height, color) => {
+    const items = Array.from({ length: 60 }, (_, i) => ({
+      value: `item-${i}`,
+      label: `action-${i}`,
+      note: "Tool settings",
+    }));
+    const state = createSelect(items, { initial: "item-42", filterable: true });
+    const frame = renderWorkspace(
+      state,
+      {
+        title: "Settings",
+        detail: () => [
+          "Configure this tool to use Concentrate for direct launches.",
+        ],
+      },
+      { tty: true, color, unicode: true, width, motion: false },
+      height,
+    );
+    expect(frame.length).toBe(height);
+    expect(widest(frame)).toBeLessThanOrEqual(width);
+    const text = strip(frame.join("\n"));
+    expect(text).toMatch(/action-42/);
+    expect(text).toMatch(/Concentrate/);
+    expect(text).toMatch(/back/);
+  },
+);
 
 const TTY = { isTTY: true, columns: 100 };
 const PIPE = { isTTY: false };
@@ -122,11 +129,11 @@ test("the wordmark reads Concentrate AI, and styles never cancel a row's backgro
     `a ${paint("focus", "b", { bold: true }, truecolor)} c`,
     truecolor,
   );
-  expect(
-    !row.includes("\x1b[0m"),
-    "no full reset inside a highlighted row",
-  ).toBeTruthy();
-  expect(row.startsWith("\x1b[48;2;") && row.endsWith("\x1b[49m")).toBeTruthy();
+  expect(row, "no full reset inside a highlighted row").not.toContain(
+    "\x1b[0m",
+  );
+  expect(row.startsWith("\x1b[48;2;")).toBe(true);
+  expect(row.endsWith("\x1b[49m")).toBe(true);
   expect(
     surface(SURFACE.selected, "x", { ...truecolor, color: 16 }),
     "no tint on 16-color terminals",
@@ -141,7 +148,7 @@ test("the header shows the mark when there is room and one line when there is no
   );
   expect(wide.length).toBe(4);
   expect(strip(wide[1])).toMatch(/Concentrate AI\s+v1\.2\.3$/);
-  for (const line of wide) expect(visibleWidth(line) <= 79).toBeTruthy();
+  expect(widest(wide)).toBeLessThanOrEqual(79);
   expect(header("1.2.3", {}, { ...truecolor, width: 50 }).length).toBe(1);
   expect(
     header("1.2.3", {}, { ...plain, width: 79 }).length,
@@ -157,26 +164,26 @@ test("wrap breaks at spaces and never exceeds the width", async () => {
   ]);
   const long = "averyveryverylongword";
   const pieces = wrap(long, 8);
-  expect(pieces.every((piece) => piece.length <= 8)).toBeTruthy();
+  expect(widest(pieces)).toBeLessThanOrEqual(8);
   expect(pieces.join("")).toBe(long);
   expect(wrap("", 10)).toStrictEqual([""]);
 });
 
 test("parseKeys decodes arrows, enter, escape, backspace, and pasted text", () => {
-  expect(parseKeys("\x1b[A\x1b[B").map((k) => k.name)).toStrictEqual([
-    "up",
-    "down",
+  expect(parseKeys("\x1b[A\x1b[B")).toMatchObject([
+    { name: "up" },
+    { name: "down" },
   ]);
-  expect(parseKeys("\x1bOA").map((k) => k.name)).toStrictEqual(["up"]);
-  expect(parseKeys("\r").map((k) => k.name)).toStrictEqual(["enter"]);
-  expect(parseKeys("\x1b").map((k) => k.name)).toStrictEqual(["escape"]);
-  expect(parseKeys("\x7f").map((k) => k.name)).toStrictEqual(["backspace"]);
-  expect(parseKeys("\x03").map((k) => k.name)).toStrictEqual(["interrupt"]);
-  expect(parseKeys("sk-1").map((k) => k.char)).toStrictEqual([
-    "s",
-    "k",
-    "-",
-    "1",
+  expect(parseKeys("\x1bOA")).toMatchObject([{ name: "up" }]);
+  expect(parseKeys("\r")).toMatchObject([{ name: "enter" }]);
+  expect(parseKeys("\x1b")).toMatchObject([{ name: "escape" }]);
+  expect(parseKeys("\x7f")).toMatchObject([{ name: "backspace" }]);
+  expect(parseKeys("\x03")).toMatchObject([{ name: "interrupt" }]);
+  expect(parseKeys("sk-1")).toMatchObject([
+    { char: "s" },
+    { char: "k" },
+    { char: "-" },
+    { char: "1" },
   ]);
   expect(parseKeys("\x1b[99~")).toStrictEqual([]);
 });
@@ -218,7 +225,7 @@ test("enter selects, escape and q cancel, ctrl-c is an interrupt", () => {
 
 test("filtering narrows the list, escape clears it first, and custom IDs are offered", () => {
   let state = createSelect(ITEMS, { filterable: true, allowCustom: true });
-  for (const char of "gam") state = press(state, { name: "char", char });
+  state = press(state, ...chars("gam"));
   expect(visible(state).length).toBe(2);
   expect(focused(state)).toBe("c");
   expect(visible(state).at(-1).value).toBe("gam");
@@ -228,7 +235,7 @@ test("filtering narrows the list, escape clears it first, and custom IDs are off
   expect(press(state, "escape").done).toStrictEqual({ cancel: true });
   const typed = press(
     createSelect(ITEMS, { filterable: true, allowCustom: true }),
-    ...[..."zzz"].map((char) => ({ name: "char", char })),
+    ...chars("zzz"),
   );
   expect(press(typed, "enter").done).toStrictEqual({ value: "zzz" });
   expect(focused(press(typed, "backspace", "backspace", "backspace"))).toBe(
@@ -246,30 +253,30 @@ test("a rendered frame never exceeds the content width and shows window indicato
   let state = createSelect(many, { rows: 8, filterable: true });
   state = press(state, ...Array(20).fill("down"));
   const lines = renderSelect(state, { title: "Pick" }, plain);
-  for (const line of lines)
-    expect(
-      visibleWidth(line) <= 72,
-      `too wide (${visibleWidth(line)}): ${line}`,
-    ).toBeTruthy();
+  expect(widest(lines), "too wide").toBeLessThanOrEqual(72);
   const text = lines.join("\n");
   expect(text).toMatch(/↑ \d+ more/);
   expect(text).toMatch(/↓ \d+ more/);
   expect(text).toMatch(/21\/40|40\/40/);
 });
 
+const filled = (n) =>
+  [...strip(contextBar(n, plain))].filter((ch) => ch !== "·").length;
+
 test("context bars keep a fixed width and grow with the window", () => {
-  const widths = [0, 4000, 8000, 128000, 1_000_000, 5_000_000].map((n) =>
-    visibleWidth(contextBar(n, plain)),
-  );
   expect(
-    widths.every((w) => w === 8),
-    widths.join(),
-  ).toBeTruthy();
-  const filled = (n) =>
-    [...strip(contextBar(n, plain))].filter((ch) => ch !== "·").length;
-  expect(filled(8000) <= filled(128000)).toBeTruthy();
-  expect(filled(128000) <= filled(1_000_000)).toBeTruthy();
-  expect(filled(2_000_000) >= filled(1_000_000)).toBeTruthy();
+    widths([
+      contextBar(0, plain),
+      contextBar(4000, plain),
+      contextBar(8000, plain),
+      contextBar(128000, plain),
+      contextBar(1_000_000, plain),
+      contextBar(5_000_000, plain),
+    ]),
+  ).toStrictEqual([8, 8, 8, 8, 8, 8]);
+  expect(filled(8000)).toBeLessThanOrEqual(filled(128000));
+  expect(filled(128000)).toBeLessThanOrEqual(filled(1_000_000));
+  expect(filled(2_000_000)).toBeGreaterThanOrEqual(filled(1_000_000));
   expect(visibleWidth(contextBar(200000, { ...plain, unicode: false }))).toBe(
     8,
   );
@@ -285,7 +292,7 @@ test("panels have uniform width and ledger rows align", () => {
     ["› cn claude", "", "a much longer line of text"],
     plain,
   );
-  expect(new Set(box.map(visibleWidth)).size).toBe(1);
+  expect(new Set(widths(box)).size).toBe(1);
   expect(box[0]).toMatch(/╭─ ready ─+╮/);
   expect(visibleWidth(ledger("ok", "key", "x", plain))).toBe(
     visibleWidth(ledger("bad", "Codex CLI", "x", plain)),
@@ -300,11 +307,11 @@ test("clip cuts to visible columns, keeps colors closed, and leaves plain text p
   const colored = paint("focus", "abcdef", {}, truecolor);
   const cut = clip(colored, 3);
   expect(strip(cut)).toBe("abc");
-  expect(cut.endsWith("\x1b[0m"), "an open color is closed").toBeTruthy();
+  expect(cut.endsWith("\x1b[0m"), "an open color is closed").toBe(true);
   expect(
-    !clip("abcdef", 3).includes("\x1b"),
+    clip("abcdef", 3),
     "no escape codes added to plain text",
-  ).toBeTruthy();
+  ).not.toContain("\x1b");
 });
 
 test("the layout width stays one column inside the terminal", () => {
@@ -320,8 +327,7 @@ test("the layout width stays one column inside the terminal", () => {
       right: "ready",
     },
   ]);
-  for (const line of renderSelect(state, {}, narrow))
-    expect(visibleWidth(line) <= 39, line).toBeTruthy();
+  expect(widest(renderSelect(state, {}, narrow))).toBeLessThanOrEqual(39);
   expect(renderSelect(state, {}, narrow).join("\n")).toMatch(/ready/);
 });
 
@@ -341,63 +347,67 @@ test("a screen stops reacting to signals while a child tool owns the terminal", 
   expect(fullScreenActive()).toBe(false);
 });
 
-test("the key screen is centered, fits any terminal, and never shows the key", () => {
-  const plain = {
-    tty: true,
-    color: 0,
-    unicode: true,
-    width: 99,
-    motion: false,
-  };
-  const secret = "sk-cn-v1-very-secret-value";
-  for (const status of ["idle", "busy", "error", "done"]) {
-    for (const [columns, rows] of [
-      [30, 8],
-      [36, 14],
-      [60, 18],
-      [100, 30],
-      [160, 50],
-    ]) {
-      const { lines, left, top } = renderKeyEntry(
-        {
-          value: secret,
-          status,
-          message: "Concentrate AI rejected this API key (HTTP 401)",
-          frame: 0,
-        },
-        columns,
-        rows,
-        plain,
-      );
-      expect(
-        lines.length <= rows,
-        `${columns}x${rows} ${status}: too tall`,
-      ).toBeTruthy();
-      expect(
-        top + lines.length <= rows,
-        `${columns}x${rows}: runs off the bottom`,
-      ).toBeTruthy();
-      for (const line of lines)
-        expect(
-          left + visibleWidth(line) <= columns,
-          `${columns}x${rows} ${status}: a line is wider than the terminal`,
-        ).toBeTruthy();
-      expect(
-        !lines.join("\n").includes("secret"),
-        "the key must only be drawn as dots",
-      ).toBeTruthy();
-    }
-  }
+const keyScreen = { ...plain, width: 99 };
+
+test.each([
+  ["idle", 30, 8],
+  ["idle", 36, 14],
+  ["idle", 60, 18],
+  ["idle", 100, 30],
+  ["idle", 160, 50],
+  ["busy", 30, 8],
+  ["busy", 36, 14],
+  ["busy", 60, 18],
+  ["busy", 100, 30],
+  ["busy", 160, 50],
+  ["error", 30, 8],
+  ["error", 36, 14],
+  ["error", 60, 18],
+  ["error", 100, 30],
+  ["error", 160, 50],
+  ["done", 30, 8],
+  ["done", 36, 14],
+  ["done", 60, 18],
+  ["done", 100, 30],
+  ["done", 160, 50],
+])(
+  "the key screen is centered, fits any terminal, and never shows the key: %s %ix%i",
+  (status, columns, rows) => {
+    const { lines, left, top } = renderKeyEntry(
+      {
+        value: "sk-cn-v1-very-secret-value",
+        status,
+        message: "Concentrate AI rejected this API key (HTTP 401)",
+        frame: 0,
+      },
+      columns,
+      rows,
+      keyScreen,
+    );
+    expect(lines.length, "too tall").toBeLessThanOrEqual(rows);
+    expect(top + lines.length, "runs off the bottom").toBeLessThanOrEqual(rows);
+    expect(
+      left + widest(lines),
+      "a line is wider than the terminal",
+    ).toBeLessThanOrEqual(columns);
+    expect(
+      lines.join("\n"),
+      "the key must only be drawn as dots",
+    ).not.toContain("secret");
+  },
+);
+
+test("the key screen is centered, fits any terminal, and never shows the key: empty card", () => {
   const wide = renderKeyEntry(
     { value: "", status: "idle", message: "", frame: 0 },
     100,
     30,
-    plain,
+    keyScreen,
   );
   const text = wide.lines.join("\n");
   expect(text).toMatch(/Connect your API key/);
   expect(text).toMatch(/Paste your key here/);
   expect(text).toMatch(/concentrate\.ai\/settings\/api-keys/);
-  expect(wide.left > 10, "the card is centered horizontally").toBeTruthy();
-  expect(wide.top > 3, "the card is centered vertically").toBeTruthy();
+  expect(wide.left, "the card is centered horizontally").toBeGreaterThan(10);
+  expect(wide.top, "the card is centered vertically").toBeGreaterThan(3);
 });

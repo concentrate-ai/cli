@@ -83,115 +83,157 @@ function fixture() {
   return env;
 }
 
-for (const id of ["claude", "codex", "opencode", "pi"]) {
-  test(`${id}: native Configure is repeatable and Reset restores exact original bytes`, async () => {
-    const env = fixture();
-    const files = toolConfigPaths(id, env);
-    const original =
-      id === "codex"
-        ? '# User comment\nmodel = "original"\n[projects."/project"]\ntrust_level = "trusted"\n'
-        : '{\n  "theme": "dark",\n  "model": "original"\n}\n';
-    fs.mkdirSync(path.dirname(files.settings), { recursive: true });
-    fs.writeFileSync(files.settings, original, { mode: 0o600 });
-    await configureTool(id, env);
-    expect(toolConfigured(id, env)).toBe(true);
-    const first = fs.readFileSync(files.settings, "utf8");
-    await configureTool(id, env);
-    expect(fs.readFileSync(files.settings, "utf8")).toBe(first);
-    expect(
-      fs.existsSync(path.join(env.HOME, ".zshrc")),
-      "Must not change shell startup files",
-    ).toBe(false);
-    if (id !== "codex")
-      expect(
-        first.includes("sk-native-test"),
-        "Never put keys in model settings",
-      ).toBe(false);
-    if (id === "codex") {
-      const bearer = () =>
-        parseConfig(fs.readFileSync(files.settings, "utf8"), "toml")
-          .model_providers.concentrate.experimental_bearer_token;
-      expect(bearer()).toBe("sk-native-test");
-      expect(fs.existsSync(files.helper), "Codex needs no helper").toBe(false);
-      writeKey("sk-rotated", env);
-      refreshConfiguredKey(env);
-      expect(bearer()).toBe("sk-rotated");
-      expect(
-        fs.statSync(files.settings).mode & 0o077,
-        "Codex's key file must be private",
-      ).toBe(0);
-    }
-    if (id === "pi") {
-      const apiKey = () =>
-        JSON.parse(fs.readFileSync(files.catalog, "utf8")).providers.concentrate
-          .apiKey;
-      expect(apiKey()).toBe("sk-native-test");
-      expect(fs.existsSync(files.helper), "Pi needs no helper").toBe(false);
-      writeKey("sk-rotated", env);
-      refreshConfiguredKey(env);
-      expect(apiKey()).toBe("sk-rotated");
-      expect(
-        fs.statSync(files.catalog).mode & 0o077,
-        "Pi's key file must be private",
-      ).toBe(0);
-    }
-    if (id === "claude") {
-      const helper = spawnSync(files.helper, [], {
-        env: { PATH: path.dirname(process.execPath) },
-        encoding: "utf8",
-      });
-      expect(helper.status, helper.stderr).toBe(0);
-      expect(helper.stdout.trim()).toBe("sk-native-test");
-      writeKey("sk-rotated", env);
-      expect(
-        spawnSync(files.helper, [], { encoding: "utf8" }).stdout.trim(),
-      ).toBe("sk-rotated");
-    }
-    const result = resetTool(id, env);
-    expect(result.reset).toBe(true);
-    expect(result.preserved).toStrictEqual([]);
-    expect(toolConfigured(id, env)).toBe(false);
-    expect(fs.readFileSync(files.settings, "utf8")).toBe(original);
-    expect(resetTool(id, env).reset).toBe(false);
+const jsonOriginal = '{\n  "theme": "dark",\n  "model": "original"\n}\n';
+const codexOriginal =
+  '# User comment\nmodel = "original"\n[projects."/project"]\ntrust_level = "trusted"\n';
+
+async function configureTwice(id, original) {
+  const env = fixture();
+  const files = toolConfigPaths(id, env);
+  fs.mkdirSync(path.dirname(files.settings), { recursive: true });
+  fs.writeFileSync(files.settings, original, { mode: 0o600 });
+  await configureTool(id, env);
+  expect(toolConfigured(id, env)).toBe(true);
+  const first = fs.readFileSync(files.settings, "utf8");
+  await configureTool(id, env);
+  expect(fs.readFileSync(files.settings, "utf8")).toBe(first);
+  expect(
+    fs.existsSync(path.join(env.HOME, ".zshrc")),
+    "Must not change shell startup files",
+  ).toBe(false);
+  return { env, files, first };
+}
+
+function expectExactReset(id, env, files, original) {
+  const result = resetTool(id, env);
+  expect(result.reset).toBe(true);
+  expect(result.preserved).toStrictEqual([]);
+  expect(toolConfigured(id, env)).toBe(false);
+  expect(fs.readFileSync(files.settings, "utf8")).toBe(original);
+  expect(resetTool(id, env).reset).toBe(false);
+}
+
+test("claude: native Configure is repeatable and Reset restores exact original bytes", async () => {
+  const { env, files, first } = await configureTwice("claude", jsonOriginal);
+  expect(
+    first.includes("sk-native-test"),
+    "Never put keys in model settings",
+  ).toBe(false);
+  const helper = spawnSync(files.helper, [], {
+    env: { PATH: path.dirname(process.execPath) },
+    encoding: "utf8",
   });
-  test(`${id}: Reset preserves user edits and restores fields cn still owns`, async () => {
+  expect(helper.status, helper.stderr).toBe(0);
+  expect(helper.stdout.trim()).toBe("sk-native-test");
+  writeKey("sk-rotated", env);
+  expect(spawnSync(files.helper, [], { encoding: "utf8" }).stdout.trim()).toBe(
+    "sk-rotated",
+  );
+  expectExactReset("claude", env, files, jsonOriginal);
+});
+
+test("codex: native Configure is repeatable and Reset restores exact original bytes", async () => {
+  const { env, files } = await configureTwice("codex", codexOriginal);
+  const bearer = () =>
+    parseConfig(fs.readFileSync(files.settings, "utf8"), "toml").model_providers
+      .concentrate.experimental_bearer_token;
+  expect(bearer()).toBe("sk-native-test");
+  expect(fs.existsSync(files.helper), "Codex needs no helper").toBe(false);
+  writeKey("sk-rotated", env);
+  refreshConfiguredKey(env);
+  expect(bearer()).toBe("sk-rotated");
+  expect(
+    fs.statSync(files.settings).mode & 0o077,
+    "Codex's key file must be private",
+  ).toBe(0);
+  expectExactReset("codex", env, files, codexOriginal);
+});
+
+test("opencode: native Configure is repeatable and Reset restores exact original bytes", async () => {
+  const { env, files, first } = await configureTwice("opencode", jsonOriginal);
+  expect(
+    first.includes("sk-native-test"),
+    "Never put keys in model settings",
+  ).toBe(false);
+  expectExactReset("opencode", env, files, jsonOriginal);
+});
+
+test("pi: native Configure is repeatable and Reset restores exact original bytes", async () => {
+  const { env, files, first } = await configureTwice("pi", jsonOriginal);
+  expect(
+    first.includes("sk-native-test"),
+    "Never put keys in model settings",
+  ).toBe(false);
+  const apiKey = () =>
+    JSON.parse(fs.readFileSync(files.catalog, "utf8")).providers.concentrate
+      .apiKey;
+  expect(apiKey()).toBe("sk-native-test");
+  expect(fs.existsSync(files.helper), "Pi needs no helper").toBe(false);
+  writeKey("sk-rotated", env);
+  refreshConfiguredKey(env);
+  expect(apiKey()).toBe("sk-rotated");
+  expect(
+    fs.statSync(files.catalog).mode & 0o077,
+    "Pi's key file must be private",
+  ).toBe(0);
+  expectExactReset("pi", env, files, jsonOriginal);
+});
+
+test("codex: Reset preserves user edits and restores fields cn still owns", async () => {
+  const env = fixture();
+  await configureTool("codex", env);
+  const files = toolConfigPaths("codex", env);
+  fs.writeFileSync(
+    files.settings,
+    fs
+      .readFileSync(files.settings, "utf8")
+      .replace('model = "gpt-small"', 'model = "user-selected"') +
+      "\n[custom]\nkeep = true\n",
+  );
+  await expect(configureTool("codex", env)).rejects.toThrow(
+    /edited after Configure/,
+  );
+  const result = resetTool("codex", env);
+  const restored = parseConfig(fs.readFileSync(files.settings, "utf8"), "toml");
+  expect(restored.model).toBe("user-selected");
+  expect(result.preserved).toContainEqual(expect.stringMatching(/: model$/));
+  expect(restored.custom.keep).toBe(true);
+  expect(restored.model_provider).toBe(undefined);
+});
+
+test.each([
+  ["claude", "model"],
+  ["opencode", "model"],
+  ["pi", "defaultModel"],
+])(
+  "%s: Reset preserves user edits and restores fields cn still owns",
+  async (id, field) => {
     const env = fixture();
     await configureTool(id, env);
     const files = toolConfigPaths(id, env);
-    const format = id === "codex" ? "toml" : "json";
-    let text = fs.readFileSync(files.settings, "utf8");
-    text =
-      id === "codex"
-        ? text.replace('model = "gpt-small"', 'model = "user-selected"') +
-          "\n[custom]\nkeep = true\n"
-        : JSON.stringify({
-            ...JSON.parse(text),
-            [id === "pi" ? "defaultModel" : "model"]: "user-selected",
-            theme: "light",
-          });
-    fs.writeFileSync(files.settings, text);
+    fs.writeFileSync(
+      files.settings,
+      JSON.stringify({
+        ...JSON.parse(fs.readFileSync(files.settings, "utf8")),
+        [field]: "user-selected",
+        theme: "light",
+      }),
+    );
     await expect(configureTool(id, env)).rejects.toThrow(
       /edited after Configure/,
     );
     const result = resetTool(id, env);
     const restored = parseConfig(
       fs.readFileSync(files.settings, "utf8"),
-      format,
+      "json",
     );
-    expect(restored[id === "pi" ? "defaultModel" : "model"]).toBe(
-      "user-selected",
+    expect(restored[field]).toBe("user-selected");
+    expect(result.preserved).toContainEqual(
+      expect.stringMatching(new RegExp(`: ${field}$`)),
     );
-    expect(
-      result.preserved.some((field) =>
-        field.endsWith(id === "pi" ? ": defaultModel" : ": model"),
-      ),
-    ).toBeTruthy();
-    if (id === "codex") {
-      expect(restored.custom.keep).toBe(true);
-      expect(restored.model_provider).toBe(undefined);
-    } else expect(restored.theme).toBe("light");
-  });
-}
+    expect(restored.theme).toBe("light");
+  },
+);
 
 test("Claude installs a persistent capability plugin; Pi and OpenCode keep context/output metadata", async () => {
   const env = fixture();
@@ -453,6 +495,10 @@ test("codex: the provider-only setup needs a saved key and is not offered when t
   expect(codexProviderPresent(env)).toBe(true);
 });
 
+const holdsTestKey = (file) =>
+  fs.existsSync(file) &&
+  fs.readFileSync(file, "utf8").includes("sk-native-test");
+
 test("logout removes the key copies that Pi and Codex keep in their own config", async () => {
   const env = fixture();
   await configureTool("pi", env);
@@ -468,12 +514,12 @@ test("logout removes the key copies that Pi and Codex keep in their own config",
   } finally {
     console.log = log;
   }
-  for (const file of [pi, codex])
-    expect(
-      fs.existsSync(file) &&
-        fs.readFileSync(file, "utf8").includes("sk-native-test"),
-      `${file} still holds the key after logout`,
-    ).toBe(false);
+  expect(holdsTestKey(pi), `${pi} still holds the key after logout`).toBe(
+    false,
+  );
+  expect(holdsTestKey(codex), `${codex} still holds the key after logout`).toBe(
+    false,
+  );
 });
 
 test("a key change leaves a Codex setup from an older cn (helper based) loadable", () => {

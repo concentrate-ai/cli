@@ -22,10 +22,11 @@ const rows = [
   },
 ];
 const text = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
+const parseLines = (jsonl) => jsonl.trim().split("\n").map(JSON.parse);
 
 test("remove only foreign diagnostic anchors and preserve message content", () => {
   const result = clearForeignRequestIds(text);
-  const parsed = result.text.trim().split("\n").map(JSON.parse);
+  const parsed = parseLines(result.text);
   expect(result.count).toBe(1);
   expect(parsed[1].requestId).toBe("native-log");
   expect(parsed[2].requestId).toBe(undefined);

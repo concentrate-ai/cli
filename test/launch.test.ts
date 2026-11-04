@@ -73,14 +73,21 @@ test("Claude session aliases preserve IDs, native flags, model overrides, and li
   ).toStrictEqual(["resume", "saved-session"]);
 });
 
-test("Claude resume uses Concentrate without assigning a new session or changing saved login", () => {
-  for (const args of [
+test.each([
+  [
     ["resume", "saved-session"],
-    ["resume"],
-    ["continue"],
     ["--resume", "saved-session"],
-    ["--continue"],
-  ]) {
+  ],
+  [["resume"], ["--resume"]],
+  [["continue"], ["--continue"]],
+  [
+    ["--resume", "saved-session"],
+    ["--resume", "saved-session"],
+  ],
+  [["--continue"], ["--continue"]],
+])(
+  "Claude resume uses Concentrate without assigning a new session or changing saved login: %j",
+  (args, forwarded) => {
     const directory = tempDir("cn-existing-claude-");
     const login = path.join(directory, ".credentials.json");
     const original =
@@ -92,16 +99,12 @@ test("Claude resume uses Concentrate without assigning a new session or changing
     expect(result.status, result.stderr).toBe(0);
     const seen = record();
     expect(seen.args.includes("--session-id")).toBe(false);
-    expect(seen.args.slice(-args.length)).toStrictEqual(
-      args[0] === "resume" || args[0] === "continue"
-        ? [`--${args[0]}`, ...args.slice(1)]
-        : args,
-    );
+    expect(seen.args.slice(-args.length)).toStrictEqual(forwarded);
     expect(seen.env.ANTHROPIC_BASE_URL).toBe("https://api.concentrate.ai");
     expect(seen.env.CN_CLAUDE_KEY).toBe("sk-test");
     expect(fs.readFileSync(login, "utf8")).toBe(original);
-  }
-});
+  },
+);
 
 test("a missing tool fails fast with exit 127, an install hint, and no key or network needed", () => {
   const { bin, env } = setup({ CONCENTRATE_API_KEY: "" });
@@ -145,30 +148,28 @@ test("claude gets Concentrate in its child environment and forwards args after -
   const settings = JSON.parse(seen.args[1]);
   expect(settings.env.ANTHROPIC_MODEL).toBe("claude-opus-4-6");
   expect(settings.apiKeyHelper).toBe("printenv CN_CLAUDE_KEY");
-  for (const name of [
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-    "CLAUDE_CODE_USE_BEDROCK",
-  ]) {
-    expect(
-      settings.env[name],
-      `${name} is blanked over the user's own settings files`,
-    ).toBe("");
-  }
   expect(
-    !seen.args.join(" ").includes("sk-test"),
-    "key must never appear in argv",
-  ).toBeTruthy();
+    settings.env,
+    "credentials are blanked over the user's own settings files",
+  ).toMatchObject({
+    ANTHROPIC_API_KEY: "",
+    ANTHROPIC_AUTH_TOKEN: "",
+    CLAUDE_CODE_USE_BEDROCK: "",
+  });
+  expect(seen.args.join(" "), "key must never appear in argv").not.toContain(
+    "sk-test",
+  );
 });
 
-test("claude launches non-Claude models with the same classifier, including provider-pinned models", () => {
-  for (const model of [
-    "glm-5.3",
-    "glm-5.3-flash",
-    "zai/glm-5.3",
-    "gpt-6-luna",
-    "openai/gpt-6-luna",
-  ]) {
+test.each([
+  "glm-5.3",
+  "glm-5.3-flash",
+  "zai/glm-5.3",
+  "gpt-6-luna",
+  "openai/gpt-6-luna",
+])(
+  "claude launches non-Claude models with the same classifier, including provider-pinned models: %s",
+  (model) => {
     const { bin, env } = setup();
     const record = fakeTool(bin, "claude");
     const result = runCn(["claude", "--model", model], { env });
@@ -179,8 +180,8 @@ test("claude launches non-Claude models with the same classifier, including prov
     expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_AUTO_MODE_MODEL).toBe(
       model,
     );
-  }
-});
+  },
+);
 
 test("claude preserves an explicit classifier choice when launching a non-Claude model", () => {
   const { bin, env } = setup({
@@ -208,8 +209,9 @@ test("claude leaves classifier selection alone for Claude models", () => {
   );
 });
 
-test("claude receives catalog context limits for custom and provider-pinned model IDs", () => {
-  for (const model of ["glm-5.3", "zai/glm-5.3"]) {
+test.each(["glm-5.3", "zai/glm-5.3"])(
+  "claude receives catalog context limits for custom and provider-pinned model IDs: %s",
+  (model) => {
     const { bin, config, env } = setup();
     const record = fakeTool(bin, "claude");
     fs.writeFileSync(
@@ -229,8 +231,8 @@ test("claude receives catalog context limits for custom and provider-pinned mode
       JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS,
       "automatic limit must not be pinned in settings across switches",
     ).toBe(undefined);
-  }
-});
+  },
+);
 
 test("claude respects a user's explicit context limit instead of the catalog", () => {
   const { bin, config, env } = setup({
@@ -255,8 +257,9 @@ test("claude respects a user's explicit context limit instead of the catalog", (
   );
 });
 
-test("claude gets no invented context limit for missing metadata or native Claude IDs", () => {
-  for (const model of ["unknown-model", "claude-sonnet-5"]) {
+test.each(["unknown-model", "claude-sonnet-5"])(
+  "claude gets no invented context limit for missing metadata or native Claude IDs: %s",
+  (model) => {
     const { bin, config, env } = setup();
     const record = fakeTool(bin, "claude");
     fs.writeFileSync(
@@ -282,24 +285,28 @@ test("claude gets no invented context limit for missing metadata or native Claud
     expect(JSON.parse(seen.args[1]).env.CLAUDE_CODE_MAX_CONTEXT_TOKENS).toBe(
       undefined,
     );
-  }
-});
+  },
+);
+
+const codingModels = Array.from({ length: 133 }, (_, i) => ({
+  id: `coding-model-${i}`,
+  name: `Coding Model ${i}`,
+  claude: true,
+}));
+const codingPickerOptions = codingModels.map((model) =>
+  expect.objectContaining({ model: model.id }),
+);
 
 test("claude's picker includes every compatible model beyond the former shortlist", () => {
   const { bin, config, env } = setup();
   const record = fakeTool(bin, "claude");
-  const models = Array.from({ length: 133 }, (_, i) => ({
-    id: `coding-model-${i}`,
-    name: `Coding Model ${i}`,
-    claude: true,
-  }));
   fs.writeFileSync(
     path.join(config, "catalog.json"),
     JSON.stringify({
       version: 6,
       fetchedAt: Date.now() / 1000,
       models: [
-        ...models,
+        ...codingModels,
         { id: "unsupported-model", name: "Unsupported", claude: false },
       ],
     }),
@@ -310,9 +317,9 @@ test("claude's picker includes every compatible model beyond the former shortlis
   const { modelPicker } = JSON.parse(record().args[1]);
   expect(modelPicker.options.length).toBe(133);
   expect(modelPicker.options[0].model).toBe("coding-model-132");
-  expect(
-    modelPicker.options.map((option) => option.model).sort(),
-  ).toStrictEqual(models.map((model) => model.id).sort());
+  expect(modelPicker.options).toEqual(
+    expect.arrayContaining(codingPickerOptions),
+  );
 });
 
 test("codex gets per-run provider overrides and the key only in env", () => {
@@ -331,7 +338,7 @@ test("codex gets per-run provider overrides and the key only in env", () => {
   expect(joined).toMatch(
     /model_providers\.concentrate\.env_key="CONCENTRATE_API_KEY"/,
   );
-  expect(!joined.includes("sk-test")).toBeTruthy();
+  expect(joined).not.toContain("sk-test");
   expect(seen.args[seen.args.indexOf("-m") + 1]).toBe("gpt-6.1-terra");
   expect(seen.args.slice(-2)).toStrictEqual(["exec", "hi"]);
 });
@@ -345,7 +352,7 @@ test("codex omits env_key when the saved provider already has a credential helpe
     '[model_providers.concentrate.auth]\ncommand = "/tmp/helper"\n',
   );
   expect(runCn(["codex", "--", "exec", "hi"], { env }).status).toBe(0);
-  expect(!record().args.join("\n").includes("env_key")).toBeTruthy();
+  expect(record().args.join("\n")).not.toContain("env_key");
   fs.writeFileSync(path.join(codexHome, "config.toml"), 'model = "x"\n');
   expect(runCn(["codex", "--", "exec", "hi"], { env }).status).toBe(0);
   expect(record().args.join("\n")).toMatch(/env_key="CONCENTRATE_API_KEY"/);
@@ -356,20 +363,20 @@ test("codex runs without the shared background server", () => {
   const record = fakeTool(bin, "codex");
   const result = runCn(["codex", "--", "exec", "hi"], { env });
   expect(result.status, result.stderr).toBe(0);
-  expect(record().args.includes("--no-daemon")).toBeTruthy();
+  expect(record().args).toContain("--no-daemon");
 });
 
 test("codex is limited to OpenAI models", async () => {
   const models = [
-    "gpt-5.5",
-    "o3",
-    "gpt-oss-120b",
-    "grok-4.7",
-    "gemini-3.8-flash",
-  ].map((id) => ({ id, codex: true, chat_candidate: true }));
-  expect(modelsFor("codex", models).map((m) => m.id)).toStrictEqual([
-    "gpt-5.5",
-    "o3",
+    { id: "gpt-5.5", codex: true, chat_candidate: true },
+    { id: "o3", codex: true, chat_candidate: true },
+    { id: "gpt-oss-120b", codex: true, chat_candidate: true },
+    { id: "grok-4.7", codex: true, chat_candidate: true },
+    { id: "gemini-3.8-flash", codex: true, chat_candidate: true },
+  ];
+  expect(modelsFor("codex", models)).toMatchObject([
+    { id: "gpt-5.5" },
+    { id: "o3" },
   ]);
 });
 
@@ -435,15 +442,16 @@ test("pi refuses versions before 0.77 and asks for an update", () => {
   expect(fs.existsSync(path.join(bin, "pi.record.json"))).toBe(false);
 });
 
-test("pi launches on 0.77 and later", () => {
-  for (const version of ["0.77.0", "0.87.1", "1.0.0"]) {
+test.each(["0.77.0", "0.87.1", "1.0.0"])(
+  "pi launches on 0.77 and later: %s",
+  (version) => {
     const { bin, env } = setup();
     const record = fakeTool(bin, "pi", { version });
     const result = runCn(["pi", "--", "-p", "hi"], { env });
     expect(result.status, result.stderr).toBe(0);
     expect(record().args.slice(-2)).toStrictEqual(["-p", "hi"]);
-  }
-});
+  },
+);
 
 test("pi keeps the user's settings and never copies auth.json", () => {
   const { bin, env } = setup();
@@ -566,19 +574,19 @@ test("reset needs --yes when not interactive, keeps Pi sessions, and can remove 
   expect(
     fs.existsSync(path.join(config, "credentials.json")),
     "nothing removed without confirmation",
-  ).toBeTruthy();
+  ).toBe(true);
 
   const done = runCn(["reset", "--yes"], { env });
   expect(done.status, done.stderr).toBe(0);
   expect(done.stdout).toMatch(/removed\s+credentials\.json/);
   expect(done.stdout).toMatch(/Pi sessions/);
-  for (const name of ["credentials.json", "config.json", "catalog.json"]) {
-    expect(fs.existsSync(path.join(config, name)), name).toBe(false);
-  }
+  expect(fs.existsSync(path.join(config, "credentials.json"))).toBe(false);
+  expect(fs.existsSync(path.join(config, "config.json"))).toBe(false);
+  expect(fs.existsSync(path.join(config, "catalog.json"))).toBe(false);
   expect(
     fs.existsSync(path.join(config, "pi-sessions", "s.jsonl")),
     "sessions are kept by default",
-  ).toBeTruthy();
+  ).toBe(true);
 
   expect(runCn(["reset", "--yes", "--sessions"], { env }).status).toBe(0);
   expect(fs.existsSync(config), "empty config dir is removed").toBe(false);
@@ -613,9 +621,13 @@ require("node:fs").writeFileSync(${JSON.stringify(record)}, JSON.stringify(proce
   };
   expect(runCn(["claude"], { env: { ...env, ...leaky } }).status).toBe(0);
   const seen = JSON.parse(fs.readFileSync(record, "utf8"));
-  for (const name of Object.keys(leaky))
-    expect(seen[name], name).toBe(undefined);
   expect(seen.ANTHROPIC_API_KEY).toBe(undefined);
+  expect(seen.ANTHROPIC_AUTH_TOKEN).toBe(undefined);
+  expect(seen.ANTHROPIC_CUSTOM_HEADERS).toBe(undefined);
+  expect(seen.CLAUDE_CODE_OAUTH_TOKEN).toBe(undefined);
+  expect(seen.CLAUDE_CODE_USE_BEDROCK).toBe(undefined);
+  expect(seen.CLAUDE_CODE_USE_VERTEX).toBe(undefined);
+  expect(seen.CLAUDE_CODE_USE_FOUNDRY).toBe(undefined);
   expect(seen.CN_CLAUDE_KEY).toBe("sk-test");
   expect(seen.ANTHROPIC_BASE_URL).toBe("https://api.concentrate.ai");
 });
@@ -658,13 +670,9 @@ test("the Codex catalog ranks models in cn's order, first model first", async ()
     ],
     path.join(dir, "models.json"),
   );
-  const ranks = JSON.parse(fs.readFileSync(file, "utf8")).models.map((m) => [
-    m.slug,
-    m.priority,
-  ]);
-  expect(ranks).toStrictEqual([
-    ["a", 1],
-    ["b", 2],
-    ["c", 3],
+  expect(JSON.parse(fs.readFileSync(file, "utf8")).models).toMatchObject([
+    { slug: "a", priority: 1 },
+    { slug: "b", priority: 2 },
+    { slug: "c", priority: 3 },
   ]);
 });

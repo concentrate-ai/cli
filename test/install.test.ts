@@ -22,6 +22,26 @@ function checkout(dir) {
   return copy;
 }
 
+const model = (id) =>
+  summarize({
+    id,
+    name: id,
+    max_input_tokens: 32768,
+    max_tokens: 4096,
+    integrations: {
+      claude_code: { supported: true },
+      codex: { supported: true },
+    },
+    providers: {
+      a: {
+        supports: {
+          input: { text: true },
+          tools: { function_calling: true },
+        },
+      },
+    },
+  });
+
 test("source install produces a self-contained CLI and launches all four adapters", () => {
   const dir = tempDir("cn-ts-install-");
   const home = path.join(dir, "home with spaces");
@@ -62,26 +82,7 @@ test("source install produces a self-contained CLI and launches all four adapter
       .version,
   );
   expect(run(["--help"]).stdout).toMatch(/claude, codex, opencode, pi/);
-  const models = ["small", "large"].map((id) =>
-    summarize({
-      id,
-      name: id,
-      max_input_tokens: 32768,
-      max_tokens: 4096,
-      integrations: {
-        claude_code: { supported: true },
-        codex: { supported: true },
-      },
-      providers: {
-        a: {
-          supports: {
-            input: { text: true },
-            tools: { function_calling: true },
-          },
-        },
-      },
-    }),
-  );
+  const models = [model("small"), model("large")];
   writeJson(path.join(env.CN_CONFIG_HOME, "catalog.json"), {
     version: 6,
     fetchedAt: Date.now() / 1000,
@@ -91,12 +92,16 @@ test("source install produces a self-contained CLI and launches all four adapter
     { claude: "small", codex: "small", opencode: "small", pi: "small" },
     env,
   );
-  for (const name of ["claude", "codex", "opencode", "pi"]) {
+  const launch = (name) => {
     const record = fakeTool(bin, name);
     const result = run([name]);
     expect(result.status, `${name}: ${result.stderr}`).toBe(0);
-    expect(record().args.length || name === "opencode").toBeTruthy();
-  }
+    return record();
+  };
+  expect(launch("claude").args.length).toBeGreaterThan(0);
+  expect(launch("codex").args.length).toBeGreaterThan(0);
+  launch("opencode");
+  expect(launch("pi").args.length).toBeGreaterThan(0);
 });
 
 test("a source checkout without pnpm fails before anything is installed", () => {

@@ -71,19 +71,20 @@ test("Claude profile isolates settings while sharing conversation files", () => 
   expect(fs.existsSync(profile.directory)).toBe(false);
   expect(fs.existsSync(session)).toBe(true);
 });
+const deviceId = (env) => {
+  const profile = prepareClaudeProfile(env);
+  try {
+    return JSON.parse(
+      fs.readFileSync(path.join(profile.directory, ".claude.json"), "utf8"),
+    ).userID;
+  } finally {
+    profile.cleanup();
+  }
+};
 test("cn claude launches share one device ID, so the prompt cache stays warm", () => {
   const root = tempDir("cn-profile-device-");
   const env = { HOME: root, CN_CONFIG_HOME: path.join(root, "cn") };
-  const ids = [1, 2].map(() => {
-    const profile = prepareClaudeProfile(env);
-    try {
-      return JSON.parse(
-        fs.readFileSync(path.join(profile.directory, ".claude.json"), "utf8"),
-      ).userID;
-    } finally {
-      profile.cleanup();
-    }
-  });
+  const ids = [deviceId(env), deviceId(env)];
   expect(ids[0]).toMatch(/^[0-9a-f]{64}$/);
   expect(ids[0]).toBe(ids[1]);
   // The user's own ID, when Claude already made one, is kept.

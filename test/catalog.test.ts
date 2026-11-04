@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, test, expect, onTestFinished } from "vitest";
+import { test, expect, onTestFinished, vi } from "vitest";
 
 import {
   ensureModel,
@@ -12,11 +12,6 @@ import {
 import { opencodeConfig, piConfig } from "../src/lib/pickers.js";
 import { tempDir } from "./helpers.js";
 import { writeJson } from "../src/lib/settings.js";
-
-const realFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = realFetch;
-});
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status });
@@ -59,29 +54,29 @@ test("modelsFor filters by the tool's flag", () => {
     { id: "a", claude: true, codex: false, chat_candidate: false },
     { id: "gpt-b", claude: false, codex: true, chat_candidate: true },
   ];
-  expect(modelsFor("claude", models).map((m) => m.id)).toStrictEqual(["a"]);
-  expect(modelsFor("codex", models).map((m) => m.id)).toStrictEqual(["gpt-b"]);
-  expect(modelsFor("pi", models).map((m) => m.id)).toStrictEqual(["gpt-b"]);
+  expect(modelsFor("claude", models)).toMatchObject([{ id: "a" }]);
+  expect(modelsFor("codex", models)).toMatchObject([{ id: "gpt-b" }]);
+  expect(modelsFor("pi", models)).toMatchObject([{ id: "gpt-b" }]);
 });
 
 test("ensureModel appends a selected model that is missing and leaves present ones", () => {
   const models = [{ id: "a", name: "A" }];
   expect(ensureModel(models, "a")).toBe(models);
-  expect(ensureModel(models, "z").map((m) => m.id)).toStrictEqual(["a", "z"]);
+  expect(ensureModel(models, "z")).toMatchObject([{ id: "a" }, { id: "z" }]);
 });
 
 test("fetchCatalog follows pagination, sorts by id, and caches", async () => {
   const env = { CN_CONFIG_HOME: tempDir() };
   const urls = [];
-  globalThis.fetch = async (url) => {
+  vi.stubGlobal("fetch", async (url) => {
     urls.push(String(url));
     return String(url).includes("after=b")
       ? json({ data: [RAW("a")], has_more: false })
       : json({ data: [RAW("c"), RAW("b")], has_more: true, last_id: "b" });
-  };
+  });
   const first = await fetchCatalog({ env });
   expect(first.source).toBe("live");
-  expect(first.models.map((m) => m.id)).toStrictEqual(["a", "b", "c"]);
+  expect(first.models).toMatchObject([{ id: "a" }, { id: "b" }, { id: "c" }]);
   expect(urls.length).toBe(2);
   const second = await fetchCatalog({ env });
   expect(second.source).toBe("cache");
@@ -90,41 +85,43 @@ test("fetchCatalog follows pagination, sorts by id, and caches", async () => {
 
 test("fetchCatalog falls back to a stale cache when the network fails", async () => {
   const env = { CN_CONFIG_HOME: tempDir() };
-  globalThis.fetch = async () => json({ data: [RAW("a")], has_more: false });
+  vi.stubGlobal("fetch", async () =>
+    json({ data: [RAW("a")], has_more: false }),
+  );
   await fetchCatalog({ env });
-  globalThis.fetch = async () => {
+  vi.stubGlobal("fetch", async () => {
     throw new TypeError("network down");
-  };
+  });
   const result = await fetchCatalog({ env, refresh: true });
   expect(result.source).toBe("stale cache");
 });
 
 test("fetchCatalog with no cache and no network throws a clear error", async () => {
-  globalThis.fetch = async () => {
+  vi.stubGlobal("fetch", async () => {
     throw new TypeError("network down");
-  };
+  });
   await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: tempDir() } }),
   ).rejects.toThrow(/Could not fetch/);
 });
 
 test("offline mode never touches the network", async () => {
-  globalThis.fetch = async () => expect.fail("fetch must not be called");
+  vi.stubGlobal("fetch", async () => expect.fail("fetch must not be called"));
   await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: tempDir(), CN_OFFLINE: "1" } }),
   ).rejects.toThrow(/offline mode/);
 });
 
 test("validateKey distinguishes a rejected key from other failures", async () => {
-  globalThis.fetch = async () => json({}, 401);
+  vi.stubGlobal("fetch", async () => json({}, 401));
   await expect(validateKey("bad")).rejects.toThrow(/rejected this API key/);
-  globalThis.fetch = async () => json({}, 503);
+  vi.stubGlobal("fetch", async () => json({}, 503));
   await expect(validateKey("k")).rejects.toThrow(/HTTP 503/);
-  globalThis.fetch = async () => {
+  vi.stubGlobal("fetch", async () => {
     throw new TypeError("offline");
-  };
+  });
   await expect(validateKey("k")).rejects.toThrow(/could not reach/);
-  globalThis.fetch = async () => json({});
+  vi.stubGlobal("fetch", async () => json({}));
   await validateKey("good");
 });
 
@@ -134,7 +131,7 @@ test("catalog text is made inert and unusable entries are dropped", () => {
     display_name: "Nice \u001b]52;c;Y3VybA==\u0007\u001b[2J\u202eName",
   });
   expect(evil.name).toBe("Nice ]52;c;Y3VybA==[2JName");
-  expect(!/[\u0000-\u001f\u007f-\u009f\u202e]/.test(evil.name)).toBeTruthy();
+  expect(evil.name).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u202e]/);
   expect(summarize({ id: "evil\u001b]0;x\u0007" })).toBe(null);
   expect(summarize({ id: "--flag" })).toBe(null);
   expect(summarize({ id: "m", display_name: 123, name: { a: 1 } }).name).toBe(
@@ -161,9 +158,7 @@ test("a malformed cache is filtered instead of crashing", async () => {
   const { models } = await fetchCatalog({
     env: { CN_CONFIG_HOME: dir, CN_OFFLINE: "1" },
   });
-  expect(models.map((m) => [m.id, m.name, m.claude])).toStrictEqual([
-    ["good", "good", false],
-  ]);
+  expect(models).toMatchObject([{ id: "good", name: "good", claude: false }]);
 });
 
 test("reasoning metadata is provider-specific and conservative for automatic routing", () => {
@@ -212,16 +207,18 @@ test("reasoning metadata is provider-specific and conservative for automatic rou
 const catalogPage = () =>
   json({ data: [RAW("live-model")], has_more: false, last_id: null });
 
-test("a catalog that was fetched is returned even when the cache cannot be written", async (t) => {
-  if (process.getuid?.() === 0) return t.skip("root ignores directory modes");
-  const dir = tempDir();
-  fs.chmodSync(dir, 0o500);
-  onTestFinished(() => fs.chmodSync(dir, 0o700));
-  globalThis.fetch = async () => catalogPage();
-  const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
-  expect(result.source).toBe("live");
-  expect(result.models.map((m) => m.id)).toStrictEqual(["live-model"]);
-});
+test.skipIf(process.getuid?.() === 0)(
+  "a catalog that was fetched is returned even when the cache cannot be written",
+  async () => {
+    const dir = tempDir();
+    fs.chmodSync(dir, 0o500);
+    onTestFinished(() => fs.chmodSync(dir, 0o700));
+    vi.stubGlobal("fetch", async () => catalogPage());
+    const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
+    expect(result.source).toBe("live");
+    expect(result.models).toMatchObject([{ id: "live-model" }]);
+  },
+);
 
 test("a cache from another format version is never served, even offline", async () => {
   const dir = tempDir();
@@ -233,9 +230,9 @@ test("a cache from another format version is never served, even offline", async 
   await expect(
     fetchCatalog({ env: { CN_CONFIG_HOME: dir, CN_OFFLINE: "1" } }),
   ).rejects.toThrow(/unavailable in offline mode/);
-  globalThis.fetch = async () => {
+  vi.stubGlobal("fetch", async () => {
     throw new Error("network down");
-  };
+  });
   await expect(fetchCatalog({ env: { CN_CONFIG_HOME: dir } })).rejects.toThrow(
     /Could not fetch/,
   );
@@ -248,10 +245,10 @@ test("a cache dated in the future is refreshed rather than trusted forever", asy
     fetchedAt: 9e12,
     models: [{ id: "stale-model" }],
   });
-  globalThis.fetch = async () => catalogPage();
+  vi.stubGlobal("fetch", async () => catalogPage());
   const result = await fetchCatalog({ env: { CN_CONFIG_HOME: dir } });
   expect(result.source).toBe("live");
-  expect(result.models.map((m) => m.id)).toStrictEqual(["live-model"]);
+  expect(result.models).toMatchObject([{ id: "live-model" }]);
 });
 
 test("catalog prices become dollars per million tokens for Pi", () => {
@@ -354,7 +351,7 @@ test("a cache from before prices is still used offline, but refreshed when onlin
   );
   const { models, source } = await fetchCatalog({ env });
   expect(source).toBe("offline cache");
-  expect(models.map((m) => m.id)).toStrictEqual(["old-model"]);
+  expect(models).toMatchObject([{ id: "old-model" }]);
   expect(models[0].cost).toBe(null);
 });
 

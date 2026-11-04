@@ -80,11 +80,9 @@ test("launch adapters add X-App and preserve existing Pi provider headers", asyn
     env,
   };
   const prepared = await codex.prepare({ ...input, forwarded: [] });
-  expect(
-    prepared.args.includes(
-      'model_providers.concentrate.http_headers={"X-App"="codex"}',
-    ),
-  ).toBeTruthy();
+  expect(prepared.args).toContain(
+    'model_providers.concentrate.http_headers={"X-App"="codex"}',
+  );
   prepared.cleanup();
   fs.writeFileSync(
     path.join(root, "models.json"),
@@ -131,14 +129,14 @@ test("Codex keeps subcommand config overrides beside its connection options", as
     env: { HOME: root },
   });
   const subcommand = prepared.args.indexOf("exec");
-  expect(
-    prepared.args.indexOf('model_provider="concentrate"') < subcommand,
-  ).toBeTruthy();
+  expect(prepared.args.indexOf('model_provider="concentrate"')).toBeLessThan(
+    subcommand,
+  );
   expect(
     prepared.args.indexOf(
       'model_providers.concentrate.http_headers={"x-app"="custom"}',
-    ) < subcommand,
-  ).toBeTruthy();
+    ),
+  ).toBeLessThan(subcommand);
   expect(prepared.args.slice(subcommand)).toStrictEqual(["exec", "Reply OK"]);
   prepared.cleanup();
 });
@@ -161,7 +159,7 @@ test("Pi keeps the user's MCP config and other files but never their login", asy
     expect(fs.readFileSync(path.join(dir, "mcp.json"), "utf8")).toBe(
       '{"mcpServers":{"a":{}}}',
     );
-    expect(fs.existsSync(path.join(dir, "extensions"))).toBeTruthy();
+    expect(fs.existsSync(path.join(dir, "extensions"))).toBe(true);
     expect(fs.existsSync(path.join(dir, "auth.json"))).toBe(false);
   } finally {
     launched.cleanup();

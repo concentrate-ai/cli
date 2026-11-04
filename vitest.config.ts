@@ -6,6 +6,7 @@ export default defineConfig({
     globalSetup: "test/global-setup.ts",
     // Black-box tests spawn installers and tools; node:test had no per-test limit.
     testTimeout: 60_000,
+    unstubGlobals: true,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

@@ -178,8 +178,8 @@ test("a checksum file from the previous release is retried instead of failing th
   );
   const result = f.run();
   expect(result.status, result.stderr).toBe(0);
-  const urls = fs.readFileSync(f.env.CN_TEST_URLS, "utf8").trim().split("\n");
-  expect(urls.filter((url) => url.endsWith("SHA256SUMS")).length).toBe(2);
+  const urls = fs.readFileSync(f.env.CN_TEST_URLS, "utf8");
+  expect(urls.match(/SHA256SUMS$/gm)).toHaveLength(2);
 });
 test("bash users on macOS or with a .bash_profile are told to edit .bash_profile", () => {
   const f = fixture();

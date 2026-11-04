@@ -54,22 +54,27 @@ async function rig(t, options = {}) {
 
 test("switching large → small → native → custom updates and clears the same process limit", async (t) => {
   const r = await rig(t);
-  for (const [model, value] of [
-    ["custom-large", "400000"],
-    ["custom-small", "128000"],
-    ["claude-sonnet-4-6", undefined],
-    ["provider/custom-small", "100000"],
-    ["other/custom-large", "400000"],
-    ["missing", undefined],
-  ]) {
+  const switchTo = async (model) => {
     r.setModel(model);
     await r.hooks.get("classic.PostModelSwitch")(
       r.$,
       { to_model: "a-stale-switch" },
       async () => ({}),
     );
-    expect(r.value(), model).toBe(value);
-  }
+    return r.value();
+  };
+  expect(await switchTo("custom-large"), "custom-large").toBe("400000");
+  expect(await switchTo("custom-small"), "custom-small").toBe("128000");
+  expect(await switchTo("claude-sonnet-4-6"), "claude-sonnet-4-6").toBe(
+    undefined,
+  );
+  expect(await switchTo("provider/custom-small"), "provider/custom-small").toBe(
+    "100000",
+  );
+  expect(await switchTo("other/custom-large"), "other/custom-large").toBe(
+    "400000",
+  );
+  expect(await switchTo("missing"), "missing").toBe(undefined);
 });
 
 test("prompt gate corrects stale limits before next and stops prompts when synchronization fails", async (t) => {
@@ -135,7 +140,7 @@ test("explicit context override stays fixed while the plugin manages other capab
     forwarded: [],
     env: { CLAUDE_CODE_MAX_CONTEXT_TOKENS: "100000" },
   });
-  expect(prepared.args.includes("--plugin-dir")).toBeTruthy();
+  expect(prepared.args).toContain("--plugin-dir");
   expect(
     JSON.parse(prepared.args[prepared.args.indexOf("--settings") + 1])
       .enabledPlugins["cn-context@concentrate-cn"],
@@ -156,13 +161,14 @@ test("explicit context override stays fixed while the plugin manages other capab
   prepared.cleanup();
 });
 
-test("modes that disable the synchronization plugin are refused with an actionable message", () => {
-  for (const flag of ["--bare", "--safe-mode"]) {
+test.each(["--bare", "--safe-mode"])(
+  "modes that disable the synchronization plugin are refused with an actionable message: %s",
+  (flag) => {
     expect(() =>
       prepareClaudeContext({ available, forwarded: [flag] }),
     ).toThrow(/Remove --bare or --safe-mode/);
-  }
-});
+  },
+);
 
 test("output budgets respect model caps without raising Claude's default request size", async () => {
   expect(outputLimit(4096)).toBe("4096");

@@ -144,17 +144,6 @@ test("keys: trimmed, and anything with spaces or control characters is refused w
   expect(environmentKey(envFor(dir, { CONCENTRATE_API_KEY: "   " }))).toBe(
     null,
   );
-  for (const bad of ["sk bad", "sk\u0000nul", "sk\u001b[2J"]) {
-    expect(() => writeKey(bad, envFor(dir))).toThrow(
-      /doesn't look like an API key/,
-    );
-    expect(() => writeKey(bad, envFor(dir))).toThrow(
-      expect.objectContaining({ message: expect.not.stringContaining(bad) }),
-    );
-    expect(() => resolveKey(envFor(dir, { CONCENTRATE_API_KEY: bad }))).toThrow(
-      expect.objectContaining({ message: expect.not.stringContaining(bad) }),
-    );
-  }
   fs.writeFileSync(
     path.join(dir, "credentials.json"),
     JSON.stringify({ api_key: "SECRET-1234\u0000" }),
@@ -166,10 +155,26 @@ test("keys: trimmed, and anything with spaces or control characters is refused w
   );
 });
 
+test.each(["sk bad", "sk\u0000nul", "sk\u001b[2J"])(
+  "keys: trimmed, and anything with spaces or control characters is refused without echoing it: %j",
+  (bad) => {
+    const dir = tempDir();
+    expect(() => writeKey(bad, envFor(dir))).toThrow(
+      /doesn't look like an API key/,
+    );
+    expect(() => writeKey(bad, envFor(dir))).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining(bad) }),
+    );
+    expect(() => resolveKey(envFor(dir, { CONCENTRATE_API_KEY: bad }))).toThrow(
+      expect.objectContaining({ message: expect.not.stringContaining(bad) }),
+    );
+  },
+);
+
 test("CN_CONFIG_HOME is resolved to an absolute path, and an existing directory keeps its mode", async () => {
-  expect(
-    path.isAbsolute(configDir({ CN_CONFIG_HOME: "relative/dir" })),
-  ).toBeTruthy();
+  expect(path.isAbsolute(configDir({ CN_CONFIG_HOME: "relative/dir" }))).toBe(
+    true,
+  );
   expect(configDir({ CN_CONFIG_HOME: "~" })).toBe(homedir());
   const shared = tempDir();
   fs.chmodSync(shared, 0o755);

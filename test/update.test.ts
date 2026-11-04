@@ -14,6 +14,9 @@ import {
   readChangelog,
 } from "../src/lib/changelog.js";
 
+const currentOrNewer = (sections) =>
+  sections.filter((s) => !isNewer(version(), s.version));
+
 test("update compares versions numerically", () => {
   expect(isNewer("0.1.1", "0.1.0")).toBe(true);
   expect(isNewer("0.10.0", "0.9.0")).toBe(true);
@@ -42,14 +45,14 @@ test("refreshing with nothing configured does nothing", async () => {
 test("the changelog lists releases newer than a given version", async () => {
   const text =
     "# Changelog\n\n## 0.2.0\n\n- b\n\n## 0.1.1\n\n- a\n\n## 0.1.0\n\n- first\n";
-  expect(changelogSections(text).map((s) => s.version)).toStrictEqual([
-    "0.2.0",
-    "0.1.1",
-    "0.1.0",
+  expect(changelogSections(text)).toMatchObject([
+    { version: "0.2.0" },
+    { version: "0.1.1" },
+    { version: "0.1.0" },
   ]);
   expect(changesSince(text, "0.1.0")).toBe("0.2.0\n- b\n\n0.1.1\n- a");
   expect(changesSince(text, "0.2.0")).toBe("");
   // The shipped changelog has a section for the current version or newer.
   const shipped = changelogSections(readChangelog());
-  expect(shipped.some((s) => !isNewer(version(), s.version))).toBeTruthy();
+  expect(currentOrNewer(shipped)).not.toHaveLength(0);
 });
