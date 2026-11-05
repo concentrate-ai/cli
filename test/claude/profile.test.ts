@@ -195,6 +195,8 @@ test(".mcp.json approvals and folder trust given under cn survive the next launc
     hasTrustDialogAccepted: true,
   };
   state.projects["/q"] = { hasTrustDialogAccepted: true };
+  state.projects["/r"] = "not a project";
+  state.projects["/s"] = { enabledMcpjsonServers: ["d"] };
   fs.writeFileSync(
     path.join(first.directory, ".claude.json"),
     JSON.stringify(state),
@@ -206,6 +208,8 @@ test(".mcp.json approvals and folder trust given under cn survive the next launc
     hasTrustDialogAccepted: true,
   });
   expect(merged.projects["/q"].hasTrustDialogAccepted).toBe(true);
+  expect(merged.projects["/r"]).toBe(undefined);
+  expect(merged.projects["/s"]).toStrictEqual({ enabledMcpjsonServers: ["d"] });
   expect(merged.theme).toBe("dark");
   expect(merged.userID).toMatch(/^[0-9a-f]{64}$/);
 });
@@ -218,4 +222,10 @@ test("projects follows the current Claude config dir", () => {
   expect(fs.realpathSync(path.join(profile.directory, "projects"))).toBe(
     fs.realpathSync(path.join(other, "projects")),
   );
+});
+
+test("a user .claude.json that is not an object is passed through unchanged", () => {
+  const { source, env } = sourceEnv("cn-profile-damaged-");
+  fs.writeFileSync(path.join(source, ".claude.json"), "[1]");
+  expect(readProfile(launch(env), ".claude.json")).toBe("[1]");
 });
