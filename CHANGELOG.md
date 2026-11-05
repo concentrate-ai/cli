@@ -7,6 +7,7 @@
   first.
 - Install and update downloads now come from the `concentrateai-hq/cli`
   repository. Old links keep redirecting.
+- `cn claude` keeps MCP server sign-ins and approvals between launches.
 
 ## 0.1.4 (2026-11-02)
 

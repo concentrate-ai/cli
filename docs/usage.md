@@ -41,8 +41,10 @@ to choose another one. For Codex, `continue` and the picker list interactive ses
 only; add `--include-non-interactive` to include scripted runs and subagent threads.
 
 Use the same OS account and configuration directory that saved the session.
-For Claude, `cn` uses a temporary copy of your user profile while sharing its
-project session directory. Model changes inside `cn claude` therefore do not
+For Claude, `cn` keeps its own Claude profile in `claude-profile/` under its
+configuration directory, refreshed from your user profile at each launch, while
+sharing its project session directory. Sign-ins and MCP server approvals made
+under `cn claude` last between launches. Model changes inside `cn claude` therefore do not
 change the default model in your ordinary Claude user settings. Claude itself
 chooses how to restore a session's last model when you later resume it normally;
 if it does not recognize that model, it falls back to its normal default.
