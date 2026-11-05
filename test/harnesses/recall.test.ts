@@ -11,6 +11,7 @@ const CATALOG = [
   {
     id: "claude-sonnet-4-6",
     name: "Sonnet",
+    released: "2026-02-17",
     claude: true,
     codex: true,
     chat_candidate: true,

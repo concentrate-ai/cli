@@ -7,6 +7,7 @@ import type {
   Harness,
   HarnessId,
   Model,
+  Preferences,
   TerminalCapabilities,
 } from "../types.js";
 import {
@@ -39,6 +40,9 @@ import {
   deleteStoredKey,
   HARNESS_IDS,
   readPreferences,
+  newestInTier,
+  CLAUDE_SONNET,
+  DEEPSEEK_FLASH,
   environmentKey,
   readStoredKey,
   readStoredKeyOrNull,
@@ -56,8 +60,6 @@ import { glyphs } from "../ui/theme.js";
 import { interactive, password, select, spinner } from "../ui/widgets.js";
 import { updateNotice } from "./update.js";
 import { version } from "../version.js";
-
-const SUGGESTED_MODELS = ["claude-sonnet-4-6", "deepseek-v4-1-flash"];
 
 // ---- helpers shared by commands -------------------------------------------------
 
@@ -101,9 +103,12 @@ async function promptModelPlain(
   const byId = new Map(available.map((m) => [m.id, m]));
   const suggestions = [
     ...new Set(
-      [current, ...SUGGESTED_MODELS, ...available.map((m) => m.id)].filter(
-        (id) => id === current || byId.has(id),
-      ),
+      [
+        current,
+        newestInTier(CLAUDE_SONNET, catalog),
+        newestInTier(DEEPSEEK_FLASH, catalog),
+        ...available.map((m) => m.id),
+      ].filter((id) => id === current || byId.has(id ?? "")),
     ),
   ].slice(0, 5);
   console.log(`\n${getHarness(harnessId).label} default model`);
@@ -113,7 +118,7 @@ async function promptModelPlain(
   console.log("Type a model ID or ?search to browse the catalog.");
   for (;;) {
     const answer = await ask(`Select [Enter keeps ${current}]: `);
-    if (!answer) return current;
+    if (!answer) return null;
     if (/^\d+$/.test(answer)) {
       const picked = suggestions[Number(answer) - 1];
       if (picked) return picked;
@@ -317,13 +322,15 @@ export async function runSetup(
         ),
       );
     }
+    const chosen: Partial<Preferences> = {};
     for (const id of HARNESS_IDS) {
-      models[id] = (await chooseModel(id, models[id], catalog)) ?? models[id];
+      const pick = await chooseModel(id, models[id], catalog);
+      if (pick !== null) chosen[id] = pick;
       console.log(
-        ledger("ok", getHarness(id as HarnessId).label, models[id], c),
+        ledger("ok", getHarness(id as HarnessId).label, pick ?? models[id], c),
       );
     }
-    writePreferences(models, env);
+    writePreferences(chosen, env);
   }
   if (persist) {
     writeKey(key, env);
@@ -506,26 +513,23 @@ export async function runModel(
   env: Environment = process.env,
 ) {
   if (!target) return showConfig(env);
-  const models = readPreferences(env);
-  if (modelId) {
-    models[target] = modelId;
-  } else {
+  let pick = modelId;
+  if (!pick) {
     let catalog: Model[] = [];
     try {
       catalog = (await fetchCatalog({ env })).models;
     } catch {
       // continue with an empty catalog; the user can still type an ID
     }
-    const chosen = await chooseModel(target, models[target], catalog);
+    const current = readPreferences(env)[target];
+    const chosen = await chooseModel(target, current, catalog);
     if (chosen === null) {
-      console.log(
-        ledger("mute", getHarness(target).label, `kept ${models[target]}`),
-      );
+      console.log(ledger("mute", getHarness(target).label, `kept ${current}`));
       return 0;
     }
-    models[target] = chosen;
+    pick = chosen;
   }
-  writePreferences(models, env);
+  writePreferences({ [target]: pick }, env);
   if (toolConfigured(target, env)) {
     try {
       await reconfigureTool(target, env);
@@ -539,9 +543,7 @@ export async function runModel(
       );
     }
   }
-  console.log(
-    ledger("ok", getHarness(target).label, `default model ${models[target]}`),
-  );
+  console.log(ledger("ok", getHarness(target).label, `default model ${pick}`));
   return 0;
 }
 
