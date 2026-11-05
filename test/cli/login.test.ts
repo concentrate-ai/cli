@@ -4,7 +4,7 @@ import { test, expect, vi } from "vitest";
 
 import { runLogin, signIn } from "../../src/lib/cli/login.js";
 import { runKey } from "../../src/lib/cli/commands.js";
-import { readStoredKey } from "../../src/lib/config/settings.js";
+import { readStoredKey, writeKey } from "../../src/lib/config/settings.js";
 import { json, tempDir } from "../helpers.js";
 
 vi.mock("../../src/lib/cli/commands.js", { spy: true });
@@ -219,4 +219,31 @@ test("sign-in refuses an endpoint that isn't https", async () => {
   await expect(signIn(env, { device: true, open: silent })).rejects.toThrow(
     "https",
   );
+});
+
+test("cn login keeps this computer's key when it already belongs to that account", async () => {
+  const calls = stubLogin(
+    json({ accounts: [{ organization_id: null, name: "Personal" }] }),
+    json({ key: "sk-cn-v1-other", reused: true }),
+  );
+  const home = loginEnv();
+  writeKey("sk-cn-v1-saved", home);
+
+  await expect(runLogin({ device: true }, home, silent)).resolves.toBe(0);
+
+  expect(JSON.parse(calls[4].body)).toMatchObject({
+    current_key: "sk-cn-v1-saved",
+  });
+  expect(readStoredKey(home)).toBe("sk-cn-v1-saved");
+});
+
+test("cn login sends no current key when none is saved", async () => {
+  const calls = stubLogin(
+    json({ accounts: [{ organization_id: null, name: "Personal" }] }),
+    json({ key: "sk-cn-v1-minted", reused: false }, 201),
+  );
+
+  await runLogin({ device: true }, loginEnv(), silent);
+
+  expect(JSON.parse(calls[4].body)).not.toHaveProperty("current_key");
 });
