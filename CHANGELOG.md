@@ -7,6 +7,9 @@
   first.
 - Install and update downloads now come from the `concentrateai-hq/cli`
   repository. Old links keep redirecting.
+- Tools you haven't chosen a model for start on the newest model in their tier
+  (Claude Sonnet, GPT Terra, DeepSeek Flash), so `cn claude` now defaults to
+  Claude Sonnet 5.5. Choosing a model for one tool no longer pins the others.
 - `cn claude` keeps MCP server sign-ins and approvals between launches.
 
 ## 0.1.4 (2026-11-02)

@@ -84,8 +84,12 @@ has enough context capacity for its history.
 Concentrate automatically selects the provider for every tool. Model pickers
 show one entry per model, without separate provider variants.
 
+Until you choose a model with `cn model <tool>`, each tool starts on the newest
+model in its tier: Claude Sonnet for Claude Code, GPT Terra for Codex, and
+DeepSeek Flash for OpenCode and Pi.
+
 Codex is limited to OpenAI models (`gpt-*`, `o<n>`) for now, defaulting to
-`gpt-6.1-terra`. A saved non-OpenAI default falls back to that model, and
+the newest GPT Terra model. A saved non-OpenAI default falls back to that model, and
 `cn codex --model <non-OpenAI id>` is refused.
 
 ```sh

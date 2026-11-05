@@ -15,12 +15,12 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 import { CnError } from "../errors.js";
-
-const CLAUDE_PREFERRED = [
-  "claude-sonnet-4-6",
-  "claude-opus-4-6",
-  "deepseek-v4-1-flash",
-];
+import {
+  CLAUDE_OPUS,
+  CLAUDE_SONNET,
+  DEEPSEEK_FLASH,
+  newestInTier,
+} from "../config/settings.js";
 
 function claudeModelOptions(selected: string, models: Model[]) {
   const byId = new Map(models.map((m) => [m.id, m]));
@@ -30,8 +30,11 @@ function claudeModelOptions(selected: string, models: Model[]) {
     chosen.push(item);
     seen.add(item.id);
   };
-  for (const id of [selected, ...CLAUDE_PREFERRED]) {
-    const entry = byId.get(id);
+  const preferred = [CLAUDE_SONNET, CLAUDE_OPUS, DEEPSEEK_FLASH].map((tier) =>
+    newestInTier(tier, models),
+  );
+  for (const id of [selected, ...preferred]) {
+    const entry = byId.get(id ?? "");
     if (entry && !seen.has(id)) take(entry);
   }
   const family = (item: Model) => item.id.split("-")[0];

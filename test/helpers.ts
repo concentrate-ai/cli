@@ -103,3 +103,12 @@ export function setup(extraEnv = {}) {
     },
   };
 }
+
+// A fresh catalog cache in a cn config directory.
+export function writeCatalog(config, models) {
+  fs.writeFileSync(
+    path.join(config, "catalog.json"),
+    JSON.stringify({ version: 6, fetchedAt: Date.now() / 1000, models }),
+    { mode: 0o600 },
+  );
+}
