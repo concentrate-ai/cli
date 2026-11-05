@@ -19,10 +19,7 @@ import {
   writePreferences,
 } from "../src/lib/config/settings.js";
 import { menuItems } from "../src/lib/cli/launcher.js";
-import { CODEX_TEMPLATE, runCn, tempDir } from "./helpers.js";
-
-const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status });
+import { CODEX_TEMPLATE, json, runCn, tempDir } from "./helpers.js";
 
 const RAW = (id, extra = {}) => ({
   id,

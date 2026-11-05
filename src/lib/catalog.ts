@@ -30,7 +30,7 @@ class HttpError extends Error {
   }
 }
 
-async function requestJson(
+export async function requestJson(
   url: string,
   {
     headers = {},
