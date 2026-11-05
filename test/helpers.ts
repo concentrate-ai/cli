@@ -18,6 +18,10 @@ export const CODEX_TEMPLATE = {
   future_catalog_field: { preserved: true },
 };
 
+/** A fetch Response with a JSON body, for vi.stubGlobal("fetch", ...). */
+export const json = (body, status = 200) =>
+  new Response(JSON.stringify(body), { status });
+
 export function tempDir(prefix = "cn-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }

@@ -11,6 +11,9 @@
   (Claude Sonnet, GPT Terra, DeepSeek Flash), so `cn claude` now defaults to
   Claude Sonnet 5.5. Choosing a model for one tool no longer pins the others.
 - `cn claude` keeps MCP server sign-ins and approvals between launches.
+- `cn login` signs you in with your browser (or a device code over SSH), lets
+  you pick your personal account or an organization, and saves a new API key.
+  Each login creates a new key named after your computer.
 
 ## 0.1.4 (2026-11-02)
 
