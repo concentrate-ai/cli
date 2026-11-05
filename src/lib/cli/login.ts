@@ -5,7 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { HttpError, requestJson } from "../catalog.js";
-import { writeKey } from "../config/settings.js";
+import { readStoredKeyOrNull, writeKey } from "../config/settings.js";
 import { CnError } from "../errors.js";
 import { refreshConfiguredKey } from "../harnesses/tool-config.js";
 import { cleanText } from "../safe.js";
@@ -263,6 +263,8 @@ async function login(
     body: {
       organization_id: account.organization_id,
       name: `cn on ${os.hostname()}`.slice(0, 64),
+      // Kept instead of minting another when it is already yours in that account
+      current_key: readStoredKeyOrNull(env) ?? undefined,
     },
   }).catch((error) => {
     throw error instanceof HttpError && error.status === 403
@@ -271,8 +273,11 @@ async function login(
         )
       : error;
   });
-  writeKey(minted.key, env);
-  refreshConfiguredKey(env);
-  console.log(ledger("ok", "login", `key saved for ${account.name}`));
+  if (!minted.reused) {
+    writeKey(minted.key, env);
+    refreshConfiguredKey(env);
+  }
+  const saved = minted.reused ? "kept your saved key" : "key saved";
+  console.log(ledger("ok", "login", `${saved} for ${account.name}`));
   return 0;
 }
