@@ -1,15 +1,16 @@
-import type { Environment, HarnessId, Preferences } from "../types.js";
+import type { Environment, HarnessId, Model, Preferences } from "../types.js";
+import { cachedModels } from "../catalog.js";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { isRecord, errorCode, errorMessage } from "../validation.js";
+import { isRecord, errorCode, errorMessage, record } from "../validation.js";
 import { CnError } from "../errors.js";
 import { isApiKey, isModelId, isOpenAiModel } from "../safe.js";
 
 export const DEFAULT_MODELS = Object.freeze<Preferences>({
-  claude: "claude-sonnet-4-6",
+  claude: "claude-sonnet-5-5",
   codex: "gpt-6.1-terra",
   opencode: "deepseek-v4-1-flash",
   pi: "deepseek-v4-1-flash",
@@ -18,6 +19,31 @@ export const DEFAULT_MODELS = Object.freeze<Preferences>({
 export const HARNESS_IDS = Object.freeze(
   Object.keys(DEFAULT_MODELS) as HarnessId[],
 );
+
+// A tool without a saved model starts on the newest release in its tier, so
+// defaults move up with the catalog. DEFAULT_MODELS covers a missing catalog.
+export const CLAUDE_SONNET = /^claude-sonnet-\d+(?:-\d+)?$/;
+export const CLAUDE_OPUS = /^claude-opus-\d+(?:-\d+)?$/;
+export const DEEPSEEK_FLASH = /^deepseek-v\d+(?:-\d+)?-flash$/;
+const TIERS: Record<HarnessId, RegExp> = {
+  claude: CLAUDE_SONNET,
+  codex: /^gpt-\d+(?:\.\d+)?-terra$/,
+  opencode: DEEPSEEK_FLASH,
+  pi: DEEPSEEK_FLASH,
+};
+
+export function newestInTier(tier: RegExp, models: Model[]) {
+  let best: Model | undefined;
+  for (const model of models) {
+    if (
+      model.released &&
+      tier.test(model.id) &&
+      model.released > (best?.released ?? "")
+    )
+      best = model;
+  }
+  return best?.id;
+}
 
 function expandHome(value: string) {
   if (value === "~" || value.startsWith("~/"))
@@ -99,8 +125,10 @@ export function readPreferences(env: Environment = process.env) {
   if (!isRecord(configured)) {
     throw new CnError("models must be an object in config.json");
   }
+  const cached = cachedModels(env);
   const models = { ...DEFAULT_MODELS };
   for (const id of HARNESS_IDS) {
+    models[id] = newestInTier(TIERS[id], cached) ?? models[id];
     const value =
       typeof configured[id] === "string" ? configured[id].trim() : "";
     // Codex is limited to OpenAI models; anything else falls back to the default.
@@ -115,14 +143,11 @@ export function needsSetup(env: Environment = process.env) {
   return !resolveKeyOrNull(env).key;
 }
 
+// Saves only the tools given, so the others keep following their tier.
 export function writePreferences(
-  models: Preferences,
+  models: Partial<Preferences>,
   env: Environment = process.env,
 ) {
-  const keys = Object.keys(models).sort().join(",");
-  if (keys !== [...HARNESS_IDS].sort().join(",")) {
-    throw new CnError("Model settings must cover every supported tool");
-  }
   for (const value of Object.values(models)) {
     if (!isModelId(value)) {
       throw new CnError(
@@ -134,7 +159,7 @@ export function writePreferences(
   const { autoProvider: _retired, ...saved } = readJson(file, {
     private: false,
   });
-  writeJson(file, { ...saved, models });
+  writeJson(file, { ...saved, models: { ...record(saved.models), ...models } });
 }
 
 // For the paths that replace a key: a damaged saved key is treated as absent so

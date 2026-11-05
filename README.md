@@ -88,7 +88,7 @@ while you run through `cn`.
 ## Codex
 
 - Works with OpenAI models for now. More models are coming soon.
-- The default model is `gpt-6.1-terra`. Pick another with `cn model codex`.
+- The default model is the newest GPT Terra model. Pick another with `cn model codex`.
 - Conversations you start with `cn codex` can be reopened with plain `codex resume`.
   `cn` offers to set that up the first time you run it. It doesn't change your
   default model or your Codex login.

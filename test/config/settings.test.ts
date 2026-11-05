@@ -14,7 +14,7 @@ import {
   environmentKey,
   configDir,
 } from "../../src/lib/config/settings.js";
-import { tempDir } from "../helpers.js";
+import { tempDir, writeCatalog } from "../helpers.js";
 import { homedir } from "node:os";
 
 const envFor = (dir, extra = {}) => ({ CN_CONFIG_HOME: dir, ...extra });
@@ -72,10 +72,7 @@ test("deleteStoredKey reports whether anything was removed", () => {
 test("preferences default, persist, and ignore blank values", () => {
   const dir = tempDir();
   expect(readPreferences(envFor(dir))).toStrictEqual(DEFAULT_MODELS);
-  writePreferences(
-    { ...DEFAULT_MODELS, claude: "claude-opus-4-6" },
-    envFor(dir),
-  );
+  writePreferences({ claude: "claude-opus-4-6" }, envFor(dir));
   expect(readPreferences(envFor(dir)).claude).toBe("claude-opus-4-6");
   fs.writeFileSync(path.join(dir, "config.json"), '{"models":{"pi":"  "}}', {
     mode: 0o600,
@@ -83,23 +80,54 @@ test("preferences default, persist, and ignore blank values", () => {
   expect(readPreferences(envFor(dir)).pi).toBe(DEFAULT_MODELS.pi);
 });
 
-test("writePreferences rejects unknown tools and empty IDs", () => {
+const tiers = [
+  { id: "claude-sonnet-4-6", released: "2026-02-17" },
+  { id: "claude-sonnet-5-5", released: "2026-09-28" },
+  { id: "claude-haiku-5-5", released: "2026-10-07" },
+  { id: "gpt-6-terra", released: "2026-09-01" },
+  { id: "gpt-6.1-terra", released: "2026-10-26" },
+  { id: "gpt-6.2-luna", released: "2026-11-01" },
+  { id: "deepseek-v4-1-flash", released: "2026-09-10" },
+  { id: "deepseek-v4-1-flash-1017", released: "2026-10-17" },
+  { id: "deepseek-v4-1-fast", released: "2026-10-17" },
+];
+
+test("tools without a saved choice start on the newest model in their tier", () => {
   const dir = tempDir();
-  expect(() => writePreferences({ claude: "x" }, envFor(dir))).toThrow(
-    /every supported tool/,
+  writeCatalog(dir, tiers);
+  expect(readPreferences(envFor(dir))).toStrictEqual({
+    claude: "claude-sonnet-5-5",
+    codex: "gpt-6.1-terra",
+    opencode: "deepseek-v4-1-flash",
+    pi: "deepseek-v4-1-flash",
+  });
+});
+
+test("saving one tool's model leaves the others following newer releases", () => {
+  const dir = tempDir();
+  writeCatalog(dir, tiers);
+  writePreferences({ codex: "gpt-6-terra" }, envFor(dir));
+  writeCatalog(dir, [
+    ...tiers,
+    { id: "claude-sonnet-6", released: "2026-12-01" },
+    { id: "gpt-6.2-terra", released: "2026-12-01" },
+  ]);
+  const models = readPreferences(envFor(dir));
+  expect(models.codex).toBe("gpt-6-terra");
+  expect(models.claude).toBe("claude-sonnet-6");
+});
+
+test("writePreferences rejects empty and unsafe IDs", () => {
+  const dir = tempDir();
+  expect(() => writePreferences({ pi: " " }, envFor(dir))).toThrow(
+    /Not a valid model ID/,
   );
   expect(() =>
-    writePreferences({ ...DEFAULT_MODELS, pi: " " }, envFor(dir)),
+    writePreferences({ pi: "--dangerously-skip-permissions" }, envFor(dir)),
   ).toThrow(/Not a valid model ID/);
-  expect(() =>
-    writePreferences(
-      { ...DEFAULT_MODELS, pi: "--dangerously-skip-permissions" },
-      envFor(dir),
-    ),
-  ).toThrow(/Not a valid model ID/);
-  expect(() =>
-    writePreferences({ ...DEFAULT_MODELS, pi: "x\u001b[31m" }, envFor(dir)),
-  ).toThrow(/Not a valid model ID/);
+  expect(() => writePreferences({ pi: "x\u001b[31m" }, envFor(dir))).toThrow(
+    /Not a valid model ID/,
+  );
 });
 
 test("needsSetup is true only while there is no key", async () => {

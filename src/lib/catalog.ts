@@ -11,10 +11,14 @@ import path from "node:path";
 
 import { CnError } from "./errors.js";
 import { cleanText, isModelId, isOpenAiModel } from "./safe.js";
-import { configDir, readJson, writeJson } from "./config/settings.js";
+import {
+  configDir,
+  DEFAULT_MODELS,
+  readJson,
+  writeJson,
+} from "./config/settings.js";
 
 export const API_ROOT = "https://api.concentrate.ai";
-const VALIDATION_MODEL = "deepseek-v4-1-flash";
 const CACHE_SECONDS = 3600;
 const MAX_PAGES = 10;
 
@@ -58,7 +62,11 @@ export async function validateKey(key: string) {
   try {
     await requestJson(`${API_ROOT}/v1/responses`, {
       headers: { Authorization: `Bearer ${key}` },
-      body: { model: VALIDATION_MODEL, input: "ping", max_output_tokens: 16 },
+      body: {
+        model: DEFAULT_MODELS.opencode,
+        input: "ping",
+        max_output_tokens: 16,
+      },
     });
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) {
@@ -318,14 +326,12 @@ async function fetchAllPages() {
   throw new Error("model catalog has more pages than expected");
 }
 
-export async function fetchCatalog({
-  refresh = false,
-  env = process.env,
-}: { refresh?: boolean; env?: Environment } = {}) {
-  const file = path.join(configDir(env), "catalog.json");
+function readCache(env: Environment) {
   let cached: Record<string, unknown> = {};
   try {
-    cached = readJson(file, { private: false });
+    cached = readJson(path.join(configDir(env), "catalog.json"), {
+      private: false,
+    });
   } catch {
     cached = {};
   }
@@ -338,6 +344,18 @@ export async function fetchCatalog({
     usable && Array.isArray(cached.models)
       ? cached.models.map(fromCache).filter((m): m is Model => m !== null)
       : null;
+  return { cached, current, saved };
+}
+
+// The last fetched catalog, without going online; empty before the first fetch.
+export const cachedModels = (env: Environment) => readCache(env).saved ?? [];
+
+export async function fetchCatalog({
+  refresh = false,
+  env = process.env,
+}: { refresh?: boolean; env?: Environment } = {}) {
+  const file = path.join(configDir(env), "catalog.json");
+  const { cached, current, saved } = readCache(env);
   const age =
     Date.now() / 1000 -
     (typeof cached.fetchedAt === "number" ? cached.fetchedAt : 0);

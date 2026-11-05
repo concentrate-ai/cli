@@ -4,7 +4,8 @@ import { test, expect } from "vitest";
 import { maskKey } from "../../src/lib/cli/commands.js";
 import { parseFlags, parseLaunchArgs } from "../../src/lib/cli/cli.js";
 import { which } from "../../src/lib/cli/launch.js";
-import { fakeTool, runCn, setup, tempDir } from "../helpers.js";
+import { DEFAULT_MODELS } from "../../src/lib/config/settings.js";
+import { fakeTool, runCn, setup, tempDir, writeCatalog } from "../helpers.js";
 
 test("a missing tool fails fast with exit 127, an install hint, and no key or network needed", () => {
   const { bin, env } = setup({ CONCENTRATE_API_KEY: "" });
@@ -74,7 +75,9 @@ test("setup asks only for the key; config, model, and logout work end to end", (
   });
   expect(setupResult.status, setupResult.stderr).toBe(0);
   expect(setupResult.stdout).toMatch(/ready/);
-  expect(setupResult.stdout).toMatch(/cn claude\s+claude-sonnet-4-6/);
+  expect(setupResult.stdout).toMatch(
+    new RegExp(`cn claude\\s+${DEFAULT_MODELS.claude}`),
+  );
   expect(setupResult.stdout, "no per-tool model questions").not.toMatch(
     /default model/,
   );
@@ -178,4 +181,17 @@ test("a model ID that looks like a flag is refused before anything launches", ()
 test("maskKey hides the key and shows only the last four characters", () => {
   expect(maskKey("sk-live-abcdef123456")).toBe("••••••••3456");
   expect(maskKey("short")).toBe("••••••••");
+});
+
+test("keeping the default at the model prompt saves nothing, so the tool follows newer releases", () => {
+  const { config, env } = setup();
+  const flash = { id: "deepseek-v4-1-flash", released: "2026-09-10" };
+  writeCatalog(config, [flash]);
+  const kept = runCn(["model", "pi"], { env, input: "\n" });
+  expect(kept.status, kept.stderr).toBe(0);
+  writeCatalog(config, [
+    flash,
+    { id: "deepseek-v5-flash", released: "2026-12-01" },
+  ]);
+  expect(runCn(["config"], { env }).stdout).toMatch(/Pi\s+deepseek-v5-flash/);
 });

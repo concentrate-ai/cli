@@ -110,9 +110,7 @@ function rememberModel({
     (candidate) => candidate !== undefined && known.has(candidate),
   );
   if (!id || id === launched) return;
-  const preferences = readPreferences(env);
-  preferences[adapter.id] = id;
-  writePreferences(preferences, env);
+  writePreferences({ [adapter.id]: id }, env);
   // stderr, so a tool's output piped to a file stays clean.
   console.error(
     ledger(
@@ -154,20 +152,22 @@ export async function launch(
       `Codex is limited to OpenAI models for now. ${override} is not supported.`,
       EXIT.USAGE,
     );
-  let model = override || readPreferences(env)[harnessId];
-  let available: Model[];
-  let catalogLoaded = false;
+  let catalog: Model[] | undefined;
   try {
-    const { models } = await fetchCatalog({ env });
-    model = routingModelId(models, model);
-    available = ensureModel(modelsFor(harnessId, models), model);
-    catalogLoaded = true;
+    catalog = (await fetchCatalog({ env })).models;
   } catch {
     console.error(
       "Model catalog unavailable; starting with the selected model only.",
     );
-    available = ensureModel([], model);
   }
+  // After the fetch, which refreshes the cache the defaults come from.
+  const wanted = override || readPreferences(env)[harnessId];
+  const catalogLoaded = catalog !== undefined;
+  const model = catalog ? routingModelId(catalog, wanted) : wanted;
+  const available = ensureModel(
+    catalog ? modelsFor(harnessId, catalog) : [],
+    model,
+  );
 
   if (tty && isResume(harnessId, forwarded))
     console.error(

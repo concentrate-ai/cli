@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "vitest";
-import { fakeTool, runCn, tempDir, setup } from "../helpers.js";
+import { fakeTool, runCn, tempDir, setup, writeCatalog } from "../helpers.js";
 
 test.each([
   [
@@ -230,6 +230,30 @@ test("claude's picker includes every compatible model beyond the former shortlis
   expect(modelPicker.options).toEqual(
     expect.arrayContaining(codingPickerOptions),
   );
+});
+
+test("claude starts on the newest Sonnet and lists the newest Sonnet, Opus, and DeepSeek Flash first", () => {
+  const { bin, config, env } = setup();
+  const record = fakeTool(bin, "claude");
+  const dated = (id, released) => ({ id, name: id, claude: true, released });
+  writeCatalog(config, [
+    dated("claude-haiku-5-5", "2026-10-07"),
+    dated("claude-opus-4-6", "2026-02-05"),
+    dated("claude-opus-5-5", "2026-09-22"),
+    dated("claude-sonnet-4-6", "2026-02-17"),
+    dated("claude-sonnet-5-5", "2026-09-28"),
+    dated("deepseek-v4-1-fast", "2026-10-17"),
+    dated("deepseek-v4-1-flash", "2026-09-10"),
+  ]);
+  const result = runCn(["claude"], { env });
+  expect(result.status, result.stderr).toBe(0);
+  const { args } = record();
+  expect(args[args.indexOf("--model") + 1]).toBe("claude-sonnet-5-5");
+  const { modelPicker } = JSON.parse(args[1]);
+  expect(modelPicker.options).toHaveLength(7);
+  expect(modelPicker.options[0].model).toBe("claude-sonnet-5-5");
+  expect(modelPicker.options[1].model).toBe("claude-opus-5-5");
+  expect(modelPicker.options[2].model).toBe("deepseek-v4-1-flash");
 });
 
 test("claude never receives the user's own Anthropic credentials or a bypass flag", () => {
