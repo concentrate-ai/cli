@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Environment } from "../types.js";
 import { configDir } from "../config/settings.js";
 import { record } from "../validation.js";
+import { claudeProfileDir } from "./claude-profile.js";
 
 const SESSION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
@@ -34,14 +35,11 @@ export function clearForeignRequestIds(text: string) {
   return { text: lines.join("\n"), count };
 }
 
-function liveSession(id: string, source: string, ownProfile: string) {
-  const roots = [path.join(source, "sessions")];
-  for (const name of fs.readdirSync(os.tmpdir())) {
-    if (!name.startsWith("cn-claude-profile-")) continue;
-    const profile = path.join(os.tmpdir(), name);
-    if (profile !== ownProfile) roots.push(path.join(profile, "sessions"));
-  }
-  for (const root of roots) {
+function liveSession(id: string, source: string, env: Environment) {
+  for (const root of [
+    path.join(source, "sessions"),
+    path.join(claudeProfileDir(env), "sessions"),
+  ]) {
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root)) {
       if (!/^\d+\.json$/.test(name)) continue;
@@ -67,14 +65,13 @@ function liveSession(id: string, source: string, ownProfile: string) {
 
 export function repairClaudeSessions({
   env,
-  profile,
+  ended,
 }: {
   env: Environment;
-  profile: string;
+  ended: string;
 }) {
-  const marker = path.join(profile, "cn-ended-sessions");
-  if (!fs.existsSync(marker)) return -1;
-  const ids = [...new Set(fs.readFileSync(marker, "utf8").split("\n"))].filter(
+  if (!fs.existsSync(ended)) return -1;
+  const ids = [...new Set(fs.readFileSync(ended, "utf8").split("\n"))].filter(
     (id) => SESSION_ID.test(id),
   );
   const source =
@@ -82,7 +79,7 @@ export function repairClaudeSessions({
   const root = path.join(source, "projects");
   let total = 0;
   for (const id of ids) {
-    if (liveSession(id, source, profile)) {
+    if (liveSession(id, source, env)) {
       console.error(
         `cn: session ${id} is open elsewhere; diagnostic cleanup skipped.`,
       );

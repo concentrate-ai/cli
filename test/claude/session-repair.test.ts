@@ -38,17 +38,16 @@ test("repairs only the ended session and keeps a private backup", () => {
   const root = tempDir("cn-repair-test-");
   const original = path.join(root, "claude");
   const dir = path.join(original, "projects", "project");
-  const profile = path.join(root, "profile");
   const config = path.join(root, "config");
   fs.mkdirSync(dir, { recursive: true });
-  fs.mkdirSync(profile);
-  fs.writeFileSync(path.join(profile, "cn-ended-sessions"), id + "\n");
+  const ended = path.join(root, "ended");
+  fs.writeFileSync(ended, id + "\n");
   const file = path.join(dir, `${id}.jsonl`);
   fs.writeFileSync(file, text);
   expect(
     repairClaudeSessions({
       env: { CLAUDE_CONFIG_DIR: original, CN_CONFIG_HOME: config },
-      profile,
+      ended,
     }),
   ).toBe(1);
   expect(clearForeignRequestIds(fs.readFileSync(file, "utf8")).count).toBe(0);
@@ -63,21 +62,47 @@ test("does not modify a session still open in another Claude process", () => {
   const root = tempDir("cn-repair-active-");
   const original = path.join(root, "claude");
   const dir = path.join(original, "projects", "project");
-  const profile = path.join(root, "profile");
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(path.join(original, "sessions"));
-  fs.mkdirSync(profile);
   fs.writeFileSync(
     path.join(original, "sessions", `${process.pid}.json`),
     JSON.stringify({ pid: process.pid, sessionId: id }),
   );
-  fs.writeFileSync(path.join(profile, "cn-ended-sessions"), id + "\n");
+  const ended = path.join(root, "ended");
+  fs.writeFileSync(ended, id + "\n");
   const file = path.join(dir, `${id}.jsonl`);
   fs.writeFileSync(file, text);
   expect(
     repairClaudeSessions({
       env: { CLAUDE_CONFIG_DIR: original, CN_CONFIG_HOME: root },
-      profile,
+      ended,
+    }),
+  ).toBe(0);
+  expect(fs.readFileSync(file, "utf8")).toBe(text);
+});
+
+test("does not modify a session still open in another cn claude", () => {
+  const root = tempDir("cn-repair-cn-active-");
+  const original = path.join(root, "claude");
+  const dir = path.join(original, "projects", "project");
+  const sessions = path.join(root, "cn", "claude-profile", "sessions");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(sessions, { recursive: true });
+  fs.writeFileSync(
+    path.join(sessions, `${process.pid}.json`),
+    JSON.stringify({ pid: process.pid, sessionId: id }),
+  );
+  const ended = path.join(root, "ended");
+  fs.writeFileSync(ended, id + "\n");
+  const file = path.join(dir, `${id}.jsonl`);
+  fs.writeFileSync(file, text);
+  expect(
+    repairClaudeSessions({
+      env: {
+        CLAUDE_CONFIG_DIR: original,
+        CN_CONFIG_HOME: path.join(root, "cn"),
+      },
+      ended,
     }),
   ).toBe(0);
   expect(fs.readFileSync(file, "utf8")).toBe(text);

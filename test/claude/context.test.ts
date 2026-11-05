@@ -8,6 +8,7 @@ import {
   outputLimit,
   supportedEffort,
 } from "../../dist/lib/claude/claude-context/register.mjs";
+import { tempDir } from "../helpers.js";
 
 const available = [
   { id: "custom-small", context: 128000 },
@@ -133,12 +134,17 @@ test("temporary plugin contains only model metadata and is removed on cleanup", 
 });
 
 test("explicit context override stays fixed while the plugin manages other capabilities", async () => {
+  const home = tempDir("cn-context-home-");
   const prepared = await claude.prepare({
     model: "custom-small",
     key: "sk-test",
     available,
     forwarded: [],
-    env: { CLAUDE_CODE_MAX_CONTEXT_TOKENS: "100000" },
+    env: {
+      HOME: home,
+      CN_CONFIG_HOME: path.join(home, "cn"),
+      CLAUDE_CODE_MAX_CONTEXT_TOKENS: "100000",
+    },
   });
   expect(prepared.args).toContain("--plugin-dir");
   expect(

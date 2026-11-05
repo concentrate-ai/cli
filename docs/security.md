@@ -5,6 +5,7 @@
   - These are removed from its environment: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_OAUTH_TOKEN`, and the Bedrock/Vertex/Foundry switches.
   - The same names are blanked in the settings `cn` passes, which outrank your own settings files.
   - The key arrives only through an `apiKeyHelper` that reads it from the child's environment. This means your own `apiKeyHelper` or settings `env` block can't send another credential to Concentrate.
+  - A login made with `/login` inside `cn claude` is never used: `cn`'s `apiKeyHelper` outranks it.
 - **The model catalog is untrusted input.** Names are stripped of terminal control characters (no escape-sequence injection), and IDs that could pass for a command-line flag are dropped.
 - **Remembering a model** only reads the session `cn` started:
   - Claude gets a pinned session ID. Pi owns its session IDs and cn does not read them to remember models.

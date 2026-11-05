@@ -146,10 +146,7 @@ const adapter: Harness = {
       cleanup() {
         context?.cleanup();
         try {
-          const count = repairClaudeSessions({
-            env,
-            profile: profile.directory,
-          });
+          const count = repairClaudeSessions({ env, ended: profile.ended });
           if (count < 0 && process.stdin.isTTY && process.stdout.isTTY)
             console.error(
               "cn: Claude did not report the session on exit; diagnostic cleanup was skipped.",
