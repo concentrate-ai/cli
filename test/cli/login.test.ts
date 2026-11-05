@@ -203,10 +203,20 @@ test.each([
   );
 });
 
-test("cn login passes on an unexpected server error", async () => {
+test("cn login explains an unexpected server error", async () => {
   stubLogin(json({}, 500));
 
   await expect(runLogin({ device: true }, loginEnv(), silent)).rejects.toThrow(
-    "HTTP 500",
+    /HTTP 500.*cn key/,
+  );
+});
+
+test("sign-in refuses an endpoint that isn't https", async () => {
+  vi.stubGlobal("fetch", async () =>
+    json({ ...CONFIG, token_endpoint: "http://auth.test/token" }),
+  );
+
+  await expect(signIn(env, { device: true, open: silent })).rejects.toThrow(
+    "https",
   );
 });

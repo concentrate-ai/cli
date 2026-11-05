@@ -12,7 +12,7 @@ import { cleanText } from "../safe.js";
 import type { Environment } from "../types.js";
 import { ledger } from "../ui/layout.js";
 import { interactive, select } from "../ui/widgets.js";
-import { isRecord, record } from "../validation.js";
+import { errorMessage, isRecord, record } from "../validation.js";
 import { runKey } from "./commands.js";
 
 const TRY_KEY = "Run cn key to paste a key instead.";
@@ -38,6 +38,15 @@ async function postForm(url: string, params: Record<string, string>) {
   return record(await response.json().catch(() => null));
 }
 
+// Endpoints from the server must be https; plain http only for a local server
+function endpoint(value: unknown, what: string) {
+  const url = new URL(text(value, what));
+  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && local))
+    throw new CnError(`Sign-in ${what} must use https. ${TRY_KEY}`);
+  return url.href;
+}
+
 function accessToken(body: Record<string, unknown>) {
   if (body.error)
     throw new CnError(`Sign-in failed (${cleanText(body.error)}). ${TRY_KEY}`);
@@ -55,15 +64,15 @@ export async function signIn(
 ): Promise<string> {
   const config = await requestJson(`${appRoot(env)}/api/cli/config`);
   const clientId = text(config.client_id, "client id");
-  const tokenUrl = text(config.token_endpoint, "sign-in address");
+  const tokenUrl = endpoint(config.token_endpoint, "address");
   return device
     ? deviceCode(
-        text(config.device_authorization_endpoint, "sign-in address"),
+        endpoint(config.device_authorization_endpoint, "address"),
         tokenUrl,
         clientId,
       )
     : browserCode(
-        text(config.authorization_endpoint, "sign-in address"),
+        endpoint(config.authorization_endpoint, "address"),
         tokenUrl,
         clientId,
         open,
@@ -166,7 +175,7 @@ function openBrowser(url: string) {
     process.platform === "darwin"
       ? ["open"]
       : process.platform === "win32"
-        ? ["cmd", "/c", "start", ""]
+        ? ["rundll32", "url.dll,FileProtocolHandler"]
         : ["xdg-open"];
   spawn(command, [...args, url], { detached: true, stdio: "ignore" })
     .on("error", () => {})
@@ -199,10 +208,21 @@ async function chooseAccount(
 }
 
 /** cn login: sign in, pick an account, and save a new API key for it. */
-export async function runLogin(
-  { device }: { device: boolean },
+export function runLogin(
+  options: { device: boolean },
   env: Environment = process.env,
   open = openBrowser,
+) {
+  return login(options, env, open).catch((error) => {
+    if (error instanceof CnError) throw error;
+    throw new CnError(`Sign-in failed (${errorMessage(error)}). ${TRY_KEY}`);
+  });
+}
+
+async function login(
+  { device }: { device: boolean },
+  env: Environment,
+  open: (url: string) => void,
 ) {
   const token = await signIn(env, {
     device: Boolean(device || env.SSH_CONNECTION || env.SSH_TTY),
