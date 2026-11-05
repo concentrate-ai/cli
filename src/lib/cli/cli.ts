@@ -26,6 +26,7 @@ import { interactive } from "../ui/widgets.js";
 import { changesSince, readChangelog } from "../changelog.js";
 import { offerUpdate, refreshConfiguredTools, runUpdate } from "./update.js";
 import { version } from "../version.js";
+import { runLogin } from "./login.js";
 
 const HELP = `cn - Concentrate AI: one key for every coding agent (beta)
 
@@ -43,6 +44,7 @@ Usage:
   cn configure cursor                      Connect Cursor desktop (quit Cursor first)
   cn settings                              Open interactive settings
   cn config                                   Show key status and default models
+  cn login [--device]                         Sign in with your browser and save a new API key
   cn key [--no-verify]                        Replace the saved API key
   cn logout                                   Remove the saved API key
   cn reset [--yes] [--sessions]               Clear everything cn saved and start fresh
@@ -215,6 +217,10 @@ async function dispatch(argv: string[], env: Environment) {
         { verify: !flags["no-verify"], models: Boolean(flags.models) },
         env,
       );
+    }
+    case "login": {
+      const { flags } = parseFlags(rest, { booleans: ["device"] });
+      return runLogin({ device: Boolean(flags.device) }, env);
     }
     case "key":
       return runKey(

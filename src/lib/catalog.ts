@@ -22,7 +22,7 @@ export const API_ROOT = "https://api.concentrate.ai";
 const CACHE_SECONDS = 3600;
 const MAX_PAGES = 10;
 
-class HttpError extends Error {
+export class HttpError extends Error {
   readonly status: number;
   constructor(status: number) {
     super(`HTTP ${status}`);

@@ -50,6 +50,7 @@ date. Set `CN_NO_UPDATE_CHECK=1` to turn off the update prompt.
 
 ```sh
 cn                    # Open the launcher and set up your API key
+cn login              # Or sign in with your browser and get a new key
 cn claude             # Start Claude Code through Concentrate
 cn codex              # Or: cn opencode, cn pi
 cn model claude       # Pick a default model for a tool
@@ -174,6 +175,7 @@ since. Save your key first with `cn key`.
 | `cn reset <tool>`     | Switch a tool back                              |
 | `cn model [<tool>]`   | Show or change default models                   |
 | `cn models [<tool>]`  | Browse available models                         |
+| `cn login`            | Sign in and save a new API key                  |
 | `cn key`              | Replace your saved API key                      |
 | `cn logout`           | Remove your saved API key                       |
 | `cn doctor [<tool>]`  | Check your setup, or test a tool's live route   |

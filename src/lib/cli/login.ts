@@ -1,12 +1,19 @@
 import http from "node:http";
+import os from "node:os";
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { requestJson } from "../catalog.js";
+import { HttpError, requestJson } from "../catalog.js";
+import { writeKey } from "../config/settings.js";
 import { CnError } from "../errors.js";
+import { refreshConfiguredKey } from "../harnesses/tool-config.js";
 import { cleanText } from "../safe.js";
 import type { Environment } from "../types.js";
-import { record } from "../validation.js";
+import { ledger } from "../ui/layout.js";
+import { interactive, select } from "../ui/widgets.js";
+import { isRecord, record } from "../validation.js";
+import { runKey } from "./commands.js";
 
 const TRY_KEY = "Run cn key to paste a key instead.";
 
@@ -151,4 +158,101 @@ async function deviceCode(
     else if (body.error !== "authorization_pending") return accessToken(body);
   }
   throw new CnError(`The sign-in code expired. ${TRY_KEY}`);
+}
+
+// Best effort: the sign-in URL is always printed too.
+function openBrowser(url: string) {
+  const [command, ...args] =
+    process.platform === "darwin"
+      ? ["open"]
+      : process.platform === "win32"
+        ? ["cmd", "/c", "start", ""]
+        : ["xdg-open"];
+  spawn(command, [...args, url], { detached: true, stdio: "ignore" })
+    .on("error", () => {})
+    .unref();
+}
+
+async function chooseAccount(
+  accounts: { organization_id: string | null; name: string }[],
+  env: Environment,
+) {
+  if (accounts.length === 1) return accounts[0];
+  if (!interactive(env))
+    throw new CnError(
+      `Choosing an account needs an interactive terminal. ${TRY_KEY}`,
+    );
+  const choice = await select(
+    {
+      title: "Create an API key in",
+      // Start on the first organization; Personal is the fallback, not the default
+      initial: String(accounts.findIndex((a) => a.organization_id !== null)),
+      items: accounts.map((account, index) => ({
+        value: String(index),
+        label: account.name,
+      })),
+    },
+    env,
+  );
+  if (choice.cancel) throw new CnError("Cancelled", 130);
+  return accounts[Number(choice.value)];
+}
+
+/** cn login: sign in, pick an account, and save a new API key for it. */
+export async function runLogin(
+  { device }: { device: boolean },
+  env: Environment = process.env,
+  open = openBrowser,
+) {
+  const token = await signIn(env, {
+    device: Boolean(device || env.SSH_CONNECTION || env.SSH_TTY),
+    open,
+  });
+  const headers = { Authorization: `Bearer ${token}` };
+  const listed = await requestJson(`${appRoot(env)}/api/cli/accounts`, {
+    headers,
+  }).catch((error) => {
+    if (error instanceof HttpError && error.status === 404) return null;
+    throw error;
+  });
+  if (!listed) {
+    console.log(
+      ledger(
+        "warn",
+        "login",
+        "browser sign-in isn't available, paste a key instead",
+      ),
+    );
+    return runKey({}, env);
+  }
+  const accounts = (Array.isArray(listed.accounts) ? listed.accounts : [])
+    .filter(isRecord)
+    .map((account) => ({
+      organization_id:
+        typeof account.organization_id === "string"
+          ? account.organization_id
+          : null,
+      name: cleanText(account.name, 80),
+    }));
+  if (accounts.length === 0)
+    throw new CnError(`Sign-in returned no accounts. ${TRY_KEY}`);
+  const account = await chooseAccount(accounts, env);
+
+  const minted = await requestJson(`${appRoot(env)}/api/cli/keys`, {
+    headers,
+    body: {
+      organization_id: account.organization_id,
+      name: `cn on ${os.hostname()}`.slice(0, 64),
+    },
+  }).catch((error) => {
+    throw error instanceof HttpError && error.status === 403
+      ? new CnError(
+          `Your role can't create API keys in ${account.name}. Ask an owner of that organization.`,
+        )
+      : error;
+  });
+  writeKey(minted.key, env);
+  refreshConfiguredKey(env);
+  console.log(ledger("ok", "login", `key saved for ${account.name}`));
+  return 0;
 }
